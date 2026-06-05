@@ -17,6 +17,7 @@ local KeyFileName = "Catalyst_Key.txt"
 -- ========================================================
 local SupportedGames = {
     [286090429] = "https://raw.githubusercontent.com/AlchemistSlime/Catalyst/refs/heads/main/CatalystArsenal.lua", -- Arsenal
+	[66654135]  = "https://raw.githubusercontent.com/AlchemistSlime/Catalyst/refs/heads/main/CatalystMM2.lua" -- MM2
 }
 
 -- ========================================================
@@ -42,7 +43,8 @@ Log("Finding game place...")
 -- Если игра НЕ поддерживается — сразу жестко кикаем
 if not scriptURL then
     Log("Game is not supported. Disconnecting user...")
-    LP:Kick("\n\n[Catalyst Hub]\nThis game (" .. gameName .. ") is currently not supported.\nJoin our Discord to check supported games list!")
+pcall(function() LP:Kick("\n\n[Catalyst Hub]\nThis game (" .. tostring(gameName) .. ") is currently not supported.") end)
+
     return
 end
 
