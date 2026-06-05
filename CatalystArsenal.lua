@@ -190,12 +190,22 @@ local Colorpicker2 = Tabs.Main:AddColorpicker("Colorpicker2", {Title = "FOV Circ
 Tabs.Visuals:AddSection("Visual Settings")
 local Toggle2 = Tabs.Visuals:AddToggle("ESP Toggle", {Title = "Enable ESP (Team Checks)", Default = false})
 local Colorpicker = Tabs.Visuals:AddColorpicker("Colorpicker", {Title = "Enemy ESP Color", Default = Color3.fromRGB(255, 0, 0)})
-Toggle2:OnChanged(function() end) Colorpicker:OnChanged(function() end)
+
+Toggle2:OnChanged(function()
+    RefreshESP()
+end)
+
+Colorpicker:OnChanged(function()
+    RefreshESP()
+end)
+
+-- ТАБ 3: MISC
 Tabs.Misc:AddSection("Movement Hacks")
 local SpeedToggle = Tabs.Misc:AddToggle("Speedhack", {Title = "Enable Speedhack", Default = false})
 local SpeedSlider = Tabs.Misc:AddSlider("SpeedSlider", {Title = "WalkSpeed Custom Value", Default = 100, Min = 16, Max = 250, Rounding = 0})
 local JumpToggle = Tabs.Misc:AddToggle("InfJump", {Title = "Infinite Jump", Default = false})
 
+-- === НАСТРОЙКА КФГ МЕНЕДЖЕРА ===
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
