@@ -7,7 +7,7 @@ local LP = Players.LocalPlayer
 
 -- База данных поддерживаемых игр (ПРОВЕРЬ ССЫЛКУ ТУТ)
 local SupportedGames = {
-    [286090429] = "raw.githubusercontent.com/AlchemistSlime/Catalyst/refs/heads/main/CatalystArsenal",
+    [286090429] = "raw.githubusercontent.com/AlchemistSlime/Catalyst/refs/heads/main/CatalystArsenal.lua",
 }
 
 local function Log(message)
