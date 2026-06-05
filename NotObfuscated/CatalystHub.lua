@@ -17,6 +17,7 @@ local KeyFileName = "Catalyst_Key.txt"
 local SupportedGames = {
     [286090429] = "https://raw.githubusercontent.com/AlchemistSlime/Catalyst/refs/heads/main/CatalystArsenal.lua", -- Arsenal
 	[142823291]  = "https://raw.githubusercontent.com/AlchemistSlime/Catalyst/refs/heads/main/CatalystMM2.lua" -- MM2
+	[17625359962] = "https://raw.githubusercontent.com/AlchemistSlime/Catalyst/refs/heads/main/CatalystRivals.lua" -- Rivals
 }
 
 -- ========================================================
