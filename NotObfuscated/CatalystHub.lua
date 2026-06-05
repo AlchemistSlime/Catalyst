@@ -5,7 +5,6 @@ local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/
 local Junkie = loadstring(game:HttpGet("https://jnkie.com/sdk/library.lua"))()
 
 -- Настройки Jnkie
--- Настройки Jnkie
 Junkie.service = "Free"
 Junkie.identifier = "1042993"
 Junkie.provider = "Alchemist Hub"
