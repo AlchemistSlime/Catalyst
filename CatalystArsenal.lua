@@ -169,7 +169,7 @@ if IsExec then
 	end)
 end
 
--- ========================================================
+-- =========================================w===============
 -- 🔥 РАЗВЕРНУТЫЕ ЭЛЕМЕНТЫ ИНТЕРФЕЙСА (UI)
 -- ========================================================
 
@@ -216,3 +216,6 @@ SaveManager:BuildConfigSection(Tabs.Settings)
 SaveManager:LoadAutoloadConfig()
 
 Window:SelectTab(1)
+while task.wait(120) do
+    RefreshESP()
+end
