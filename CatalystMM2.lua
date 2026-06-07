@@ -1,5 +1,5 @@
 -- ========================================================
--- CATALYST MM2 v3.7 (AUTO FARM + KILL ALL)
+-- CATALYST MM2 v3.8 (AUTO KILL FARM + FIXED SPAM)
 -- ========================================================
 local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
@@ -69,7 +69,7 @@ local function FindGunDrop()
     return nil
 end
 
--- ========== ПОИСК REMOTE ДЛЯ УБИЙСТВА ==========
+-- ========== ПОИСК KILL REMOTE ==========
 local KillRemote = nil
 local function FindKillRemote()
     if KillRemote then return KillRemote end
@@ -81,7 +81,6 @@ local function FindKillRemote()
             return KillRemote
         end
     end
-    -- Если не нашли, ищем любой RemoteEvent в RS
     for _, obj in pairs(RS:GetChildren()) do
         if obj:IsA("RemoteEvent") then
             KillRemote = obj
@@ -93,20 +92,14 @@ end
 
 local function KillPlayer(target)
     local rem = FindKillRemote()
-    if not rem then
-        Fluent:Notify({ Title = "Kill Failed", Content = "Kill remote not found", Duration = 2 })
-        return false
-    end
-    -- Пробуем разные аргументы
-    local success, err = pcall(function()
-        if rem:IsA("RemoteEvent") then
+    if rem then
+        pcall(function()
             rem:FireServer(target)
             rem:FireServer(target.Character or target)
             rem:FireServer(target.Name)
-        end
-    end)
-    if not success then
-        -- Альтернативный метод: телепорт и удар
+        end)
+    else
+        -- Запасной метод: телепорт + удар
         local char = LP.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         local targetHrp = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
@@ -117,7 +110,6 @@ local function KillPlayer(target)
             hrp.CFrame = oldPos
         end
     end
-    return true
 end
 
 -- ========== KILL ALL (только Murderer) ==========
@@ -166,8 +158,38 @@ local function KillMurderer()
     Fluent:Notify({ Title = "Kill Murderer", Content = #targets .. " Murderer(s) killed", Duration = 2 })
 end
 
--- ========== АВТОФАРМ (CoinServer) ==========
+-- ========== АВТО-КИЛЛ ФАРМ ==========
+local autoKillEnabled = false
+local lastKillTime = 0
+local function AutoKillFarm()
+    if not autoKillEnabled then return end
+    local now = tick()
+    if now - lastKillTime < 1.5 then return end -- задержка между убийствами
+    local myRole = GetRole(LP)
+    if myRole == "Murderer" then
+        for _, p in pairs(Plrs:GetPlayers()) do
+            if p ~= LP and GetRole(p) == "Innocent" and p.Character and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
+                KillPlayer(p)
+                lastKillTime = now
+                break
+            end
+        end
+    elseif myRole == "Sheriff" and HasGun() then
+        for _, p in pairs(Plrs:GetPlayers()) do
+            if p ~= LP and GetRole(p) == "Murderer" and p.Character and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
+                KillPlayer(p)
+                lastKillTime = now
+                break
+            end
+        end
+    end
+end
+
+-- ========== ПОИСК COIN SERVER (ТИХИЙ, С ГРУППИРОВКОЙ ЛОГОВ) ==========
 local CoinServerPart = nil
+local lastCoinLog = 0
+local coinLogCount = 0
+
 local function GetCoinServer()
     if CoinServerPart and CoinServerPart.Parent then return CoinServerPart end
     local container = workspace:FindFirstChild("CoinContainer")
@@ -177,11 +199,22 @@ local function GetCoinServer()
             return CoinServerPart
         end
     end
-    -- Альтернативный поиск
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj.Name == "CoinServer" and obj:IsA("BasePart") then
             CoinServerPart = obj
             return CoinServerPart
+        end
+    end
+    -- Логируем в консоль с группировкой (не спамим уведомления)
+    local now = tick()
+    if now - lastCoinLog > 5 then
+        coinLogCount = 1
+        lastCoinLog = now
+        print("[Catalyst] CoinServer not found (x1)")
+    else
+        coinLogCount = coinLogCount + 1
+        if coinLogCount % 10 == 0 then
+            print("[Catalyst] CoinServer not found (x" .. coinLogCount .. ")")
         end
     end
     return nil
@@ -191,10 +224,7 @@ local farmCooldown = false
 local function FarmCoins()
     if farmCooldown then return end
     local cs = GetCoinServer()
-    if not cs then
-        Fluent:Notify({ Title = "Auto Farm", Content = "CoinServer not found", Duration = 2 })
-        return
-    end
+    if not cs then return end
     local char = LP.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -212,10 +242,10 @@ end
 
 -- ========== GUI ==========
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v3.7" .. (isMobile and " [Mobile]" or ""),
+    Title = "Catalyst v3.8" .. (isMobile and " [Mobile]" or ""),
     SubTitle = "MM2",
     TabWidth = 160,
-    Size = UDim2.fromOffset(660, 600),
+    Size = UDim2.fromOffset(660, 620),
     Acrylic = false,
     Theme = "Dark"
 })
@@ -231,7 +261,7 @@ local Options = Fluent.Options
 
 -- Home
 local rankText = (_G.CatalystKeyType or "Free") .. " / " .. (_G.CatalystRank or "Standard")
-Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 3.7" })
+Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 3.8" })
 Tabs.Home:AddButton({ Title = "Copy Discord", Callback = function() setclipboard("alchemistslimee") Fluent:Notify({ Title = "Copied" }) end })
 
 -- ========== COMBAT TAB ==========
@@ -254,6 +284,8 @@ local killAllBtn = Tabs.Combat:AddButton({ Title = "Kill All (Murderer only)", C
 local killMurderBtn = Tabs.Combat:AddButton({ Title = "Kill Murderer (requires gun)", Callback = function() KillMurderer() end })
 local farmBtn = Tabs.Combat:AddButton({ Title = "Farm Coins (once)", Callback = function() FarmCoins() end })
 local autoFarm = Tabs.Combat:AddToggle("autoFarm", { Title = "Auto Farm Coins (every 2s)", Default = false })
+local autoKillToggle = Tabs.Combat:AddToggle("autoKill", { Title = "Auto Kill Farm (Murderer→Innocent / Sheriff→Murderer)", Default = false })
+autoKillToggle:OnChanged(function(val) autoKillEnabled = val end)
 
 -- ========== VISUALS TAB ==========
 -- Murderer
@@ -293,7 +325,7 @@ local cheatPara = Tabs.Misc:AddParagraph({ Title = "Suspects", Content = "None" 
 local autoCheat = Tabs.Misc:AddToggle("autoCheat", { Title = "Auto Scan", Default = false })
 Tabs.Misc:AddButton({ Title = "Scan Now", Callback = function() detectCheaters() end })
 
--- ========== GUN DROP КОД (БЕЗ ИЗМЕНЕНИЙ) ==========
+-- ========== GUN DROP (БЕЗ ИЗМЕНЕНИЙ) ==========
 local gunDropPart = nil
 local gunDropHighlight = nil
 local gunDropText = nil
@@ -474,7 +506,7 @@ else
     aimToggle.Enabled = false
 end
 
--- ========== ESP (HIGHLIGHT + NAME) ==========
+-- ========== ESP ==========
 local nameTexts = {}
 local function ClearNameESP()
     for _, txt in pairs(nameTexts) do
@@ -664,13 +696,20 @@ UIS.JumpRequest:Connect(function()
     end
 end)
 
--- ========== АВТОФАРМ ПО ТОГГЛУ ==========
+-- ========== АВТОФАРМ И АВТО-КИЛЛ (ЦИКЛЫ) ==========
 task.spawn(function()
     while true do
         task.wait(2)
         if autoFarm and autoFarm.Value then
             pcall(FarmCoins)
         end
+    end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(1.5) -- частота убийств
+        pcall(AutoKillFarm)
     end
 end)
 
