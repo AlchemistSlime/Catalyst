@@ -15,9 +15,6 @@ local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.
 _G.CatalystKeyType = _G.CatalystKeyType or "Free"
 _G.CatalystRank = _G.CatalystRank or "Standard"
 
--- Отключение вкладки Dev (для релиза можно поставить true)
-local DISABLE_DEV_TAB = false
-
 -- ========================================================
 -- 📝 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 -- ========================================================
@@ -60,10 +57,10 @@ local function HasRevolver()
 end
 
 -- ========================================================
--- 🖥️ СОЗДАНИЕ ОКНА И ВКЛАДОК
+-- 🖥️ СОЗДАНИЕ ОКНА И ВКЛАДОК (С TESTING NEW VERSION)
 -- ========================================================
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v2.6.0",
+    Title = "Catalyst v2.7.0 [TESTING NEW VERSION]",
     SubTitle = "MM2",
     TabWidth = 160,
     Size = UDim2.fromOffset(660, 550),
@@ -73,16 +70,15 @@ local Window = Fluent:CreateWindow({
 })
 
 local Tabs = {
-    Home = Window:AddTab({ Title = "Home", Icon = "house" }),
+    Home = Window:AddTab({ Title = "Home", Icon = "home" }),
     Combat = Window:AddTab({ Title = "Combat", Icon = "crosshair" }),
     Visuals = Window:AddTab({ Title = "Visuals", Icon = "eye" }),
     Misc = Window:AddTab({ Title = "Misc", Icon = "star" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
-if not DISABLE_DEV_TAB then
-    Tabs.Dev = Window:AddTab({ Title = "Dev", Icon = "bug" })
-end
+-- Dev вкладка (всегда активна)
+Tabs.Dev = Window:AddTab({ Title = "Dev", Icon = "bug" })
 
 local Options = Fluent.Options
 
@@ -92,7 +88,7 @@ local Options = Fluent.Options
 local rankText = (_G.CatalystKeyType or "Unknown") .. " / " .. (_G.CatalystRank or "Standard")
 Tabs.Home:AddParagraph({
     Title = "Welcome to Catalyst!",
-    Content = "Rank: " .. rankText .. "\nGame: Murder Mystery 2\nDeveloper: Alchemist Slime\nTG: @alchemistslimee"
+    Content = "Rank: " .. rankText .. "\nGame: Murder Mystery 2\nDeveloper: Alchemist Slime\nTG: @alchemistslimee\nVersion: 2.7.0 TESTING"
 })
 Tabs.Home:AddButton({
     Title = "📋 Copy Discord Tag",
@@ -101,10 +97,10 @@ Tabs.Home:AddButton({
         Fluent:Notify({ Title = "Copied!", Content = "Discord tag: alchemistslimee", Duration = 2 })
     end
 })
-Tabs.Home:AddSection("Version 2.6.0")
+Tabs.Home:AddSection("Changelog")
 Tabs.Home:AddParagraph({
-    Title = "Changelog",
-    Content = "• Optimized performance\n• Grouped ESP settings by role\n• Added Dev tab (remote logger, cursor info, cheat detection)\n• Improved Gun Drop detection"
+    Title = "Latest Changes",
+    Content = "• Fixed smooth name ESP\n• Added separate cheat detection\n• Dev tab fully functional\n• Added TESTING NEW VERSION label"
 })
 
 -- ========================================================
@@ -240,7 +236,6 @@ local function UpdateGunDropVisuals()
     end
 end
 
--- Обновление визуалов каждые 0.2 секунды (не в RenderStepped)
 task.spawn(function()
     while true do
         task.wait(0.2)
@@ -293,7 +288,6 @@ function TeleportToGunDrop(returnBack)
     return true
 end
 
--- Авто-телепорт (раз в секунду)
 task.spawn(function()
     while true do
         task.wait(1)
@@ -304,7 +298,7 @@ task.spawn(function()
 end)
 
 -- ========================================================
--- 🎯 AIMBOT (С ОПТИМИЗАЦИЕЙ)
+-- 🎯 AIMBOT
 -- ========================================================
 local function GetTarget()
     local best, minAngle, maxAngle = nil, math.huge, (Options.Slider and Options.Slider.Value or 80)
@@ -332,7 +326,6 @@ local function GetTarget()
     return best
 end
 
--- FOV Circle (только если Drawing доступен)
 if (typeof(Drawing) == "table" and Drawing.new ~= nil) then
     local FOV = Drawing.new("Circle")
     FOV.Thickness, FOV.NumSides, FOV.Filled, FOV.Transparency = 1.5, 60, false, 1
@@ -348,7 +341,6 @@ if (typeof(Drawing) == "table" and Drawing.new ~= nil) then
     end)
 end
 
--- Aimbot подключён к RenderStepped (для плавности)
 RunS.RenderStepped:Connect(function()
     if not (Options.MyToggle and Options.MyToggle.Value) then return end
     local press = UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or (Options.Keybind and Options.Keybind:GetState())
@@ -364,7 +356,7 @@ RunS.RenderStepped:Connect(function()
 end)
 
 -- ========================================================
--- 👥 ESP (HIGHLIGHT + ИМЕНА) ОПТИМИЗИРОВАННЫЕ
+-- 👥 ESP (HIGHLIGHT + ПЛАВНЫЕ ИМЕНА)
 -- ========================================================
 local NameTextObjects = {}
 
@@ -375,7 +367,6 @@ local function ClearNameESP()
     NameTextObjects = {}
 end
 
--- Обновление подсветки (вызывается по событиям)
 local function UpdateHighlight(p)
     if not p or p == LP or not p.Character or not p.Character:FindFirstChild("HumanoidRootPart") then return end
     local role = GetRole(p)
@@ -407,55 +398,49 @@ local function UpdateHighlight(p)
     end
 end
 
--- Обновление текстового ESP (раз в 0.15 секунды)
-local lastTextUpdate = 0
-RunS.Heartbeat:Connect(function()
-    local now = tick()
-    if now - lastTextUpdate < 0.15 then return end
-    lastTextUpdate = now
-    pcall(function()
-        for _, p in pairs(Plrs:GetPlayers()) do
-            if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
-                local role = GetRole(p)
-                local show = false
-                local color = Color3.new(1,1,1)
-                if role == "Murderer" and Options.MurdererTextESP and Options.MurdererTextESP.Value then
-                    show = true
-                    color = Options.MurdererTextColor and Options.MurdererTextColor.Value or Color3.fromRGB(255,0,0)
-                elseif role == "Sheriff" and Options.SheriffTextESP and Options.SheriffTextESP.Value then
-                    show = true
-                    color = Options.SheriffTextColor and Options.SheriffTextColor.Value or Color3.fromRGB(0,0,255)
-                elseif role == "Innocent" and Options.InnocentTextESP and Options.InnocentTextESP.Value then
-                    show = true
-                    color = Options.InnocentTextColor and Options.InnocentTextColor.Value or Color3.fromRGB(0,255,0)
-                end
-                if show then
-                    local root = p.Character.HumanoidRootPart
-                    local vec, onScreen = Cam:WorldToViewportPoint(root.Position + Vector3.new(0, 2.5, 0))
-                    if onScreen then
-                        local text = NameTextObjects[p]
-                        if not text then
-                            text = Drawing.new("Text")
-                            text.Center = true
-                            text.Outline = true
-                            text.Size = 14
-                            NameTextObjects[p] = text
-                        end
-                        text.Text = p.Name .. " (" .. role .. ")"
-                        text.Position = Vector2.new(vec.X, vec.Y)
-                        text.Color = color
-                        text.Visible = true
-                    elseif NameTextObjects[p] then
-                        NameTextObjects[p].Visible = false
+-- Плавное обновление имён (каждый кадр, но без пересоздания объектов)
+RunS.RenderStepped:Connect(function()
+    for _, p in pairs(Plrs:GetPlayers()) do
+        if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
+            local role = GetRole(p)
+            local show = false
+            local color = Color3.new(1,1,1)
+            if role == "Murderer" and Options.MurdererTextESP and Options.MurdererTextESP.Value then
+                show = true
+                color = Options.MurdererTextColor and Options.MurdererTextColor.Value or Color3.fromRGB(255,0,0)
+            elseif role == "Sheriff" and Options.SheriffTextESP and Options.SheriffTextESP.Value then
+                show = true
+                color = Options.SheriffTextColor and Options.SheriffTextColor.Value or Color3.fromRGB(0,0,255)
+            elseif role == "Innocent" and Options.InnocentTextESP and Options.InnocentTextESP.Value then
+                show = true
+                color = Options.InnocentTextColor and Options.InnocentTextColor.Value or Color3.fromRGB(0,255,0)
+            end
+            if show then
+                local root = p.Character.HumanoidRootPart
+                local vec, onScreen = Cam:WorldToViewportPoint(root.Position + Vector3.new(0, 2.5, 0))
+                if onScreen then
+                    local text = NameTextObjects[p]
+                    if not text then
+                        text = Drawing.new("Text")
+                        text.Center = true
+                        text.Outline = true
+                        text.Size = 14
+                        NameTextObjects[p] = text
                     end
+                    text.Text = p.Name .. " (" .. role .. ")"
+                    text.Position = Vector2.new(vec.X, vec.Y)
+                    text.Color = color
+                    text.Visible = true
                 elseif NameTextObjects[p] then
                     NameTextObjects[p].Visible = false
                 end
             elseif NameTextObjects[p] then
                 NameTextObjects[p].Visible = false
             end
+        elseif NameTextObjects[p] then
+            NameTextObjects[p].Visible = false
         end
-    end)
+    end
 end)
 
 -- Обновление ролей и подсветки (раз в 2 секунды)
@@ -469,7 +454,6 @@ task.spawn(function()
     end
 end)
 
--- События добавления игроков
 Plrs.PlayerAdded:Connect(function(p)
     p.CharacterAdded:Connect(function()
         task.wait(0.5)
@@ -477,7 +461,6 @@ Plrs.PlayerAdded:Connect(function(p)
     end)
 end)
 
--- Реакция на изменение настроек подсветки
 local function RefreshHighlights()
     for _, p in pairs(Plrs:GetPlayers()) do UpdateHighlight(p) end
 end
@@ -488,7 +471,6 @@ SheriffColor:OnChanged(RefreshHighlights)
 InnocentESP:OnChanged(RefreshHighlights)
 InnocentColor:OnChanged(RefreshHighlights)
 
--- Очистка текста при смене настроек
 local function ClearTextCache()
     ClearNameESP()
 end
@@ -500,102 +482,105 @@ InnocentTextESP:OnChanged(ClearTextCache)
 InnocentTextColor:OnChanged(ClearTextCache)
 
 -- ========================================================
--- 🧪 DEV TAB (ИНФОРМАЦИЯ ПОД КУРСОРОМ, РЕМОТЫ, АВТОДЕТЕКТ)
+-- 🧪 DEV TAB (ПОЛНОСТЬЮ РАБОЧИЙ)
 -- ========================================================
-if not DISABLE_DEV_TAB then
-    Tabs.Dev:AddSection("Cursor Info")
-    local cursorInfoPara = Tabs.Dev:AddParagraph({ Title = "Target", Content = "Move mouse over any object" })
-    local cursorToggle = Tabs.Dev:AddToggle("CursorInfo", { Title = "Enable Cursor Info", Default = true })
-    
-    -- Обновление информации под курсором (раз в 0.1 сек)
-    task.spawn(function()
-        while true do
-            task.wait(0.1)
-            if not cursorToggle or not cursorToggle.Value then continue end
-            local mouse = UIS:GetMouseLocation()
-            local target = Cam:ScreenPointToRay(mouse.X, mouse.Y).Origin
-            local part, hitPos = workspace:FindPartOnRay(Ray.new(target, Cam.CFrame.LookVector * 1000), LP.Character)
-            if part then
-                local info = string.format("Object: %s\nClass: %s\nName: %s\nChildren: %d\nParent: %s\nColor: %s\nMaterial: %s",
-                    part:GetFullName(), part.ClassName, part.Name, #part:GetChildren(), part.Parent and part.Parent.Name or "nil",
-                    tostring(part.Color), tostring(part.Material))
-                cursorInfoPara:SetContent(info)
-            else
-                cursorInfoPara:SetContent("No object in sight")
-            end
-        end
-    end)
-    
-    Tabs.Dev:AddSection("Remote Logger")
-    local remoteLogPara = Tabs.Dev:AddParagraph({ Title = "Last 3 Remotes", Content = "None" })
-    local remoteLogs = {}
-    local function logRemote(name, args)
-        table.insert(remoteLogs, 1, { time = os.date("%H:%M:%S"), name = name, args = tostring(args) })
-        if #remoteLogs > 3 then table.remove(remoteLogs) end
-        local text = ""
-        for _, log in ipairs(remoteLogs) do
-            text = text .. string.format("[%s] %s → %s\n", log.time, log.name, log.args)
-        end
-        remoteLogPara:SetContent(text)
-    end
-    -- Перехват RemoteEvent
-    local oldMeta = getrawmetatable(game)
-    setreadonly(oldMeta, false)
-    local oldNamecall = oldMeta.__namecall
-    oldMeta.__namecall = newcclosure(function(self, ...)
-        local args = {...}
-        if string.find(getnamecallmethod(), "FireServer") and (self:IsA("RemoteEvent") or self:IsA("RemoteFunction")) then
-            logRemote(self.Name, args)
-        end
-        return oldNamecall(self, ...)
-    end)
-    setreadonly(oldMeta, true)
-    
-    Tabs.Dev:AddSection("Cheater Detection")
-    local detectedCheatersPara = Tabs.Dev:AddParagraph({ Title = "Suspected Cheaters", Content = "None" })
-    local autoDetectToggle = Tabs.Dev:AddToggle("AutoDetect", { Title = "Auto Scan (every 5s)", Default = false })
-    local scanButton = Tabs.Dev:AddButton({
-        Title = "Scan Now",
-        Callback = function() detectCheaters() end
-    })
-    
-    local function detectCheaters()
-        local suspects = {}
-        for _, p in pairs(Plrs:GetPlayers()) do
-            if p ~= LP and p.Character and p.Character:FindFirstChild("Humanoid") then
-                local hum = p.Character.Humanoid
-                local speed = hum.WalkSpeed
-                if speed > 18 then
-                    table.insert(suspects, p.Name .. " (Speed: " .. math.floor(speed) .. ")")
-                end
-                -- Простейшая проверка на noclip (можно углубить)
-                local root = p.Character:FindFirstChild("HumanoidRootPart")
-                if root and root.CanCollide == false then
-                    table.insert(suspects, p.Name .. " (Noclip)")
-                end
-            end
-        end
-        if #suspects > 0 then
-            detectedCheatersPara:SetContent(table.concat(suspects, "\n"))
-            Fluent:Notify({ Title = "Cheaters Detected", Content = #suspects .. " player(s) suspicious", Duration = 3 })
+Tabs.Dev:AddSection("Cursor Info")
+local cursorInfoPara = Tabs.Dev:AddParagraph({ Title = "Target", Content = "Move mouse over any object" })
+local cursorToggle = Tabs.Dev:AddToggle("CursorInfo", { Title = "Enable Cursor Info", Default = true })
+
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if not cursorToggle or not cursorToggle.Value then continue end
+        local mouse = UIS:GetMouseLocation()
+        local ray = Cam:ScreenPointToRay(mouse.X, mouse.Y)
+        local part, hitPos = workspace:FindPartOnRay(Ray.new(ray.Origin, ray.Direction * 1000), LP.Character)
+        if part then
+            local info = string.format("Object: %s\nClass: %s\nName: %s\nChildren: %d\nParent: %s\nColor: %s\nMaterial: %s",
+                part:GetFullName(), part.ClassName, part.Name, #part:GetChildren(), part.Parent and part.Parent.Name or "nil",
+                tostring(part.Color), tostring(part.Material))
+            cursorInfoPara:SetContent(info)
         else
-            detectedCheatersPara:SetContent("None found")
-            Fluent:Notify({ Title = "Scan Complete", Content = "No cheaters detected", Duration = 2 })
+            cursorInfoPara:SetContent("No object in sight")
         end
     end
-    
-    task.spawn(function()
-        while true do
-            task.wait(5)
-            if autoDetectToggle and autoDetectToggle.Value then
-                pcall(detectCheaters)
-            end
-        end
-    end)
+end)
+
+Tabs.Dev:AddSection("Remote Logger")
+local remoteLogPara = Tabs.Dev:AddParagraph({ Title = "Last 3 Remotes", Content = "None" })
+local remoteLogs = {}
+local function logRemote(name, args)
+    table.insert(remoteLogs, 1, { time = os.date("%H:%M:%S"), name = name, args = tostring(args) })
+    if #remoteLogs > 3 then table.remove(remoteLogs) end
+    local text = ""
+    for _, log in ipairs(remoteLogs) do
+        text = text .. string.format("[%s] %s → %s\n", log.time, log.name, log.args)
+    end
+    remoteLogPara:SetContent(text)
 end
 
+-- Безопасный перехват ремотов (если getrawmetatable недоступен – пропускаем)
+pcall(function()
+    local oldMeta = getrawmetatable(game)
+    if oldMeta then
+        setreadonly(oldMeta, false)
+        local oldNamecall = oldMeta.__namecall
+        oldMeta.__namecall = newcclosure(function(self, ...)
+            local args = {...}
+            if string.find(getnamecallmethod(), "FireServer") and (self:IsA("RemoteEvent") or self:IsA("RemoteFunction")) then
+                logRemote(self.Name, args)
+            end
+            return oldNamecall(self, ...)
+        end)
+        setreadonly(oldMeta, true)
+    end
+end)
+
+Tabs.Dev:AddSection("Cheater Detection")
+local detectedCheatersPara = Tabs.Dev:AddParagraph({ Title = "Suspected Cheaters", Content = "None" })
+local autoDetectToggle = Tabs.Dev:AddToggle("AutoDetect", { Title = "Auto Scan (every 5s)", Default = false })
+
+-- Отдельная функция детекта
+local function detectCheaters()
+    local suspects = {}
+    for _, p in pairs(Plrs:GetPlayers()) do
+        if p ~= LP and p.Character and p.Character:FindFirstChild("Humanoid") then
+            local hum = p.Character.Humanoid
+            local speed = hum.WalkSpeed
+            if speed > 18 then
+                table.insert(suspects, p.Name .. " (Speed: " .. math.floor(speed) .. ")")
+            end
+            local root = p.Character:FindFirstChild("HumanoidRootPart")
+            if root and root.CanCollide == false then
+                table.insert(suspects, p.Name .. " (Noclip)")
+            end
+        end
+    end
+    if #suspects > 0 then
+        detectedCheatersPara:SetContent(table.concat(suspects, "\n"))
+        Fluent:Notify({ Title = "Cheaters Detected", Content = #suspects .. " player(s) suspicious", Duration = 3 })
+    else
+        detectedCheatersPara:SetContent("None found")
+        Fluent:Notify({ Title = "Scan Complete", Content = "No cheaters detected", Duration = 2 })
+    end
+end
+
+Tabs.Dev:AddButton({
+    Title = "Scan Now",
+    Callback = function() pcall(detectCheaters) end
+})
+
+task.spawn(function()
+    while true do
+        task.wait(5)
+        if autoDetectToggle and autoDetectToggle.Value then
+            pcall(detectCheaters)
+        end
+    end
+end)
+
 -- ========================================================
--- 🏃‍♂️ MISC (NOCLIP, FLY, SPEED) – оптимизировано
+-- 🏃‍♂️ MISC (NOCLIP, FLY, SPEED)
 -- ========================================================
 RunS.RenderStepped:Connect(function()
     local char = LP.Character
@@ -631,7 +616,7 @@ UIS.JumpRequest:Connect(function()
 end)
 
 -- ========================================================
--- 💾 SAVE MANAGER И ЗАВЕРШЕНИЕ
+-- 💾 SAVE MANAGER (НАСТРОЙКИ)
 -- ========================================================
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
@@ -642,7 +627,8 @@ InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 SaveManager:BuildConfigSection(Tabs.Settings)
 SaveManager:LoadAutoloadConfig()
 
-Window:SelectTab(1) -- Home
+-- Выбор вкладки Home (первая)
+Window:SelectTab(1)
 
 -- Очистка при смене персонажа
 LP.CharacterAdded:Connect(function()
