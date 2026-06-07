@@ -10,9 +10,13 @@ local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.
 
 -- 📦 КАЖДЫЙ ЭЛЕМЕНТ ИНТЕРФЕЙСА В ОДНУ СТРОКУ (МЕНЯЙ НАЗВАНИЯ В КАВЫЧКАХ ТУТ ➡️)
 local Window = Fluent:CreateWindow({Title = "Catalyst v2.3.8", SubTitle = "MM2", TabWidth = 160, Size = UDim2.fromOffset(580, 460), Acrylic = false, Theme = "Dark", MinimizeKey = Enum.KeyCode.LeftControl})
-local Tabs = {Main = Window:AddTab({ Title = "Combat", Icon = "crosshair" }), Visuals = Window:AddTab({ Title = "Visuals", Icon = "eye" }), Misc = Window:AddTab({ Title = "Misc", Icon = "star" }), Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })}
+local Tabs = {Main = Window:AddTab({ Title = "Combat", Icon = "crosshair" }), Visuals = Window:AddTab({ Title = "Visuals", Icon = "eye" }), Misc = Window:AddTab({ Title = "Misc", Icon = "star" }), Home = Window:AddTab({ Title = "Home", Icon = "house" }), Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })}
 local Options = Fluent.Options
-
+-- ТАБ 0: HOME (TAB: 1)
+    Tabs.Home:AddParagraph({
+        Title = "Welcome to Catalyst!",
+        Content = "Rank:" .. tostring(_G.CatalystKeyType) .. "/nMurder Mystery 2 /nHappy Exploiting!"
+     })
 -- ТАБ 1: COMBAT
 Tabs.Main:AddSection("Rage Aimbot Settings")
 local ToggleAim = Tabs.Main:AddToggle("MyToggle", {Title = "Enable Aimbot", Default = false})
