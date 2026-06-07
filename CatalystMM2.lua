@@ -4,7 +4,7 @@
 local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
 
--- 🔥 АВТО-ЗАГРУЗКА БИБЛИОТЕК
+-- 🔥 ЗАГРУЗКА БИБЛИОТЕК
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
@@ -57,13 +57,13 @@ local function HasRevolver()
 end
 
 -- ========================================================
--- 🖥️ СОЗДАНИЕ ОКНА И ВКЛАДОК (С TESTING NEW VERSION)
+-- 🖥️ СОЗДАНИЕ ОКНА И ВКЛАДОК
 -- ========================================================
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v2.7.0 [TESTING NEW VERSION]",
+    Title = "Catalyst v2.8.0 [TESTING NEW VERSION]",
     SubTitle = "MM2",
     TabWidth = 160,
-    Size = UDim2.fromOffset(660, 550),
+    Size = UDim2.fromOffset(680, 580),
     Acrylic = false,
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.LeftControl
@@ -77,9 +77,6 @@ local Tabs = {
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
--- Dev вкладка (всегда активна)
-Tabs.Dev = Window:AddTab({ Title = "Dev", Icon = "bug" })
-
 local Options = Fluent.Options
 
 -- ========================================================
@@ -88,7 +85,7 @@ local Options = Fluent.Options
 local rankText = (_G.CatalystKeyType or "Unknown") .. " / " .. (_G.CatalystRank or "Standard")
 Tabs.Home:AddParagraph({
     Title = "Welcome to Catalyst!",
-    Content = "Rank: " .. rankText .. "\nGame: Murder Mystery 2\nDeveloper: Alchemist Slime\nTG: @alchemistslimee\nVersion: 2.7.0 TESTING"
+    Content = "Rank: " .. rankText .. "\nGame: Murder Mystery 2\nDeveloper: Alchemist Slime\nTG: @alchemistslimee\nVersion: 2.8.0 TESTING"
 })
 Tabs.Home:AddButton({
     Title = "📋 Copy Discord Tag",
@@ -100,7 +97,7 @@ Tabs.Home:AddButton({
 Tabs.Home:AddSection("Changelog")
 Tabs.Home:AddParagraph({
     Title = "Latest Changes",
-    Content = "• Fixed smooth name ESP\n• Added separate cheat detection\n• Dev tab fully functional\n• Added TESTING NEW VERSION label"
+    Content = "• Removed Dev tab, moved cheater detection to Misc\n• Fixed Gun Drop (no emoji, smoother)\n• Darker highlight outline\n• Added Anti-Fling and Fling options\n• Blacklist for fling"
 })
 
 -- ========================================================
@@ -123,6 +120,41 @@ local AutoTPGunDrop = Tabs.Combat:AddToggle("AutoTPGunDrop", { Title = "Auto TP 
 local SafeTPToggle = Tabs.Combat:AddToggle("SafeTP", { Title = "Safe TP (avoid Murderer within 5 studs)", Default = true })
 local CooldownInfo = Tabs.Combat:AddParagraph({ Title = "Cooldown", Content = "Ready" })
 
+-- Anti-Fling & Fling
+Tabs.Combat:AddSection("Fling")
+local AntiFlingToggle = Tabs.Combat:AddToggle("AntiFling", { Title = "Anti-Fling (protect yourself)", Default = false })
+local FlingAll = Tabs.Combat:AddButton({
+    Title = "Fling All (return after 0.5s)",
+    Callback = function() FlingPlayers("All") end
+})
+local FlingMurder = Tabs.Combat:AddButton({
+    Title = "Fling Murderers",
+    Callback = function() FlingPlayers("Murderer") end
+})
+local FlingSheriff = Tabs.Combat:AddButton({
+    Title = "Fling Sheriffs",
+    Callback = function() FlingPlayers("Sheriff") end
+})
+
+-- Blacklist (мульти-дроп даун)
+Tabs.Combat:AddSection("Blacklist (do NOT fling these)")
+local BlacklistDropdown = Tabs.Combat:AddDropdown("Blacklist", {
+    Title = "Select players to ignore",
+    Values = {},
+    Multi = true,
+    Default = {}
+})
+local function UpdateBlacklistDropdown()
+    local players = {}
+    for _, p in pairs(Plrs:GetPlayers()) do
+        if p ~= LP then table.insert(players, p.Name) end
+    end
+    BlacklistDropdown:SetValues(players)
+end
+UpdateBlacklistDropdown()
+Plrs.PlayerAdded:Connect(UpdateBlacklistDropdown)
+Plrs.PlayerRemoved:Connect(UpdateBlacklistDropdown)
+
 -- ========================================================
 -- 👁️ VISUALS TAB (GROUPED BY ROLE)
 -- ========================================================
@@ -130,14 +162,14 @@ local CooldownInfo = Tabs.Combat:AddParagraph({ Title = "Cooldown", Content = "R
 Tabs.Visuals:AddSection("Murderer")
 local MurdererESP = Tabs.Visuals:AddToggle("KillerESP", { Title = "Highlight Murderer", Default = false })
 local MurdererColor = Tabs.Visuals:AddColorpicker("KillerESPColor", { Title = "Highlight Color", Default = Color3.fromRGB(255, 0, 0) })
-local MurdererTextESP = Tabs.Visuals:AddToggle("MurdererTextESP", { Title = "Show Name ESP", Default = true })
+local MurdererTextESP = Tabs.Visuals:AddToggle("MurdererTextESP", { Title = "Show Name ESP", Default = false })
 local MurdererTextColor = Tabs.Visuals:AddColorpicker("MurdererTextColor", { Title = "Name Color", Default = Color3.fromRGB(255, 0, 0) })
 
 -- Sheriff
 Tabs.Visuals:AddSection("Sheriff")
 local SheriffESP = Tabs.Visuals:AddToggle("SherifESP", { Title = "Highlight Sheriff", Default = false })
 local SheriffColor = Tabs.Visuals:AddColorpicker("SherifESPColor", { Title = "Highlight Color", Default = Color3.fromRGB(0, 0, 255) })
-local SheriffTextESP = Tabs.Visuals:AddToggle("SheriffTextESP", { Title = "Show Name ESP", Default = true })
+local SheriffTextESP = Tabs.Visuals:AddToggle("SheriffTextESP", { Title = "Show Name ESP", Default = false })
 local SheriffTextColor = Tabs.Visuals:AddColorpicker("SheriffTextColor", { Title = "Name Color", Default = Color3.fromRGB(0, 0, 255) })
 
 -- Innocent
@@ -155,7 +187,7 @@ local GunDropTextToggle = Tabs.Visuals:AddToggle("GunDropTextESP", { Title = "Sh
 local GunDropTextColor = Tabs.Visuals:AddColorpicker("GunDropTextColor", { Title = "Text Color", Default = Color3.fromRGB(255, 255, 255) })
 
 -- ========================================================
--- 🛠️ MISC TAB
+-- 🛠️ MISC TAB (СЮДА ПЕРЕНЕСЁН CHEATER DETECTION)
 -- ========================================================
 Tabs.Misc:AddSection("Blatant Exploits & Movement")
 local NoclipToggle = Tabs.Misc:AddToggle("Noclip", { Title = "Enable No-Clip", Default = false })
@@ -163,8 +195,50 @@ local FlyToggle = Tabs.Misc:AddToggle("Fly", { Title = "Enable Infinite Fly", De
 local SpeedToggle = Tabs.Misc:AddToggle("Speedhack", { Title = "Enable Speedhack", Default = false })
 local SpeedSlider = Tabs.Misc:AddSlider("SpeedSlider", { Title = "Speedhack Limit (KM/h)", Default = 50, Min = 16, Max = 250, Rounding = 0 })
 
+Tabs.Misc:AddSection("Cheater Detection")
+local detectedCheatersPara = Tabs.Misc:AddParagraph({ Title = "Suspected Cheaters", Content = "None" })
+local autoDetectToggle = Tabs.Misc:AddToggle("AutoDetect", { Title = "Auto Scan (every 5s)", Default = false })
+
+local function detectCheaters()
+    local suspects = {}
+    for _, p in pairs(Plrs:GetPlayers()) do
+        if p ~= LP and p.Character and p.Character:FindFirstChild("Humanoid") then
+            local hum = p.Character.Humanoid
+            local speed = hum.WalkSpeed
+            if speed > 18 then
+                table.insert(suspects, p.Name .. " (Speed: " .. math.floor(speed) .. ")")
+            end
+            local root = p.Character:FindFirstChild("HumanoidRootPart")
+            if root and root.CanCollide == false then
+                table.insert(suspects, p.Name .. " (Noclip)")
+            end
+        end
+    end
+    if #suspects > 0 then
+        detectedCheatersPara:SetContent(table.concat(suspects, "\n"))
+        Fluent:Notify({ Title = "Cheaters Detected", Content = #suspects .. " player(s) suspicious", Duration = 3 })
+    else
+        detectedCheatersPara:SetContent("None found")
+        Fluent:Notify({ Title = "Scan Complete", Content = "No cheaters detected", Duration = 2 })
+    end
+end
+
+Tabs.Misc:AddButton({
+    Title = "Scan Now",
+    Callback = function() pcall(detectCheaters) end
+})
+
+task.spawn(function()
+    while true do
+        task.wait(5)
+        if autoDetectToggle and autoDetectToggle.Value then
+            pcall(detectCheaters)
+        end
+    end
+end)
+
 -- ========================================================
--- 🔫 GUN DROP ПОИСК И ВИЗУАЛЫ (ОПТИМИЗИРОВАНО)
+-- 🔫 GUN DROP (ИСПРАВЛЕНО: БЕЗ ЭМОДЗИ, ПЛАВНО, ТЕМНЕЕ ОБВОДКА)
 -- ========================================================
 local GunDropPart = nil
 local GunDropHighlight = nil
@@ -202,8 +276,12 @@ local function UpdateGunDropVisuals()
             if not GunDropHighlight or GunDropHighlight.Parent ~= gd then
                 if GunDropHighlight then GunDropHighlight:Destroy() end
                 GunDropHighlight = Instance.new("Highlight")
-                GunDropHighlight.FillColor = GunDropColor and GunDropColor.Value or Color3.fromRGB(128,0,255)
-                GunDropHighlight.OutlineColor = Color3.fromRGB(255,255,255)
+                local baseColor = GunDropColor and GunDropColor.Value or Color3.fromRGB(128,0,255)
+                -- Делаем цвет на 20% темнее для обводки
+                local h, s, v = baseColor:ToHSV()
+                local darker = Color3.fromHSV(h, s, math.max(v * 0.8, 0))
+                GunDropHighlight.FillColor = darker
+                GunDropHighlight.OutlineColor = baseColor
                 GunDropHighlight.FillTransparency = 0.4
                 GunDropHighlight.OutlineTransparency = 0
                 GunDropHighlight.Parent = gd
@@ -221,7 +299,7 @@ local function UpdateGunDropVisuals()
             local pos, onScreen = Cam:WorldToViewportPoint(gd.Position + Vector3.new(0, 1.5, 0))
             if onScreen then
                 GunDropTextObj.Position = Vector2.new(pos.X, pos.Y)
-                GunDropTextObj.Text = "🔫 GUN DROP"
+                GunDropTextObj.Text = "GUN DROP"  -- без эмодзи
                 GunDropTextObj.Color = GunDropTextColor and GunDropTextColor.Value or Color3.fromRGB(255,255,255)
                 GunDropTextObj.Visible = true
             else
@@ -236,6 +314,7 @@ local function UpdateGunDropVisuals()
     end
 end
 
+-- Обновление визуалов каждые 0.2 секунды
 task.spawn(function()
     while true do
         task.wait(0.2)
@@ -243,8 +322,18 @@ task.spawn(function()
     end
 end)
 
+-- Плавное движение текста (RenderStepped)
+RunS.RenderStepped:Connect(function()
+    if GunDropTextObj and GunDropTextObj.Visible and GunDropPart then
+        local pos, onScreen = Cam:WorldToViewportPoint(GunDropPart.Position + Vector3.new(0, 1.5, 0))
+        if onScreen then
+            GunDropTextObj.Position = Vector2.new(pos.X, pos.Y)
+        end
+    end
+end)
+
 -- ========================================================
--- 🚀 ТЕЛЕПОРТ К GUN DROP (С ЗАЩИТАМИ)
+-- 🚀 ТЕЛЕПОРТ К GUN DROP
 -- ========================================================
 local function IsMurdererNearby(radius)
     for _, p in pairs(Plrs:GetPlayers()) do
@@ -296,6 +385,75 @@ task.spawn(function()
         end
     end
 end)
+
+-- ========================================================
+-- 🥊 ANTI-FLING И ФЛИНГ ФУНКЦИИ
+-- ========================================================
+-- Anti-Fling: защита от резких изменений позиции
+local lastPosition = nil
+RunS.RenderStepped:Connect(function()
+    if AntiFlingToggle and AntiFlingToggle.Value then
+        local char = LP.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            local currentPos = char.HumanoidRootPart.Position
+            if lastPosition and (currentPos - lastPosition).Magnitude > 50 then
+                -- Подозрение на флинг – телепортируем назад
+                char.HumanoidRootPart.CFrame = CFrame.new(lastPosition)
+                Fluent:Notify({ Title = "Anti-Fling", Content = "Teleport blocked!", Duration = 1 })
+            end
+            lastPosition = currentPos
+        end
+    else
+        lastPosition = nil
+    end
+end)
+
+local function FlingPlayers(targetType)
+    local blacklist = Options.Blacklist and Options.Blacklist.Value or {}
+    local flingList = {}
+    for _, p in pairs(Plrs:GetPlayers()) do
+        if p ~= LP and not table.find(blacklist, p.Name) then
+            local role = GetRole(p)
+            if targetType == "All" then
+                table.insert(flingList, p)
+            elseif targetType == "Murderer" and role == "Murderer" then
+                table.insert(flingList, p)
+            elseif targetType == "Sheriff" and role == "Sheriff" then
+                table.insert(flingList, p)
+            end
+        end
+    end
+    if #flingList == 0 then
+        Fluent:Notify({ Title = "Fling", Content = "No targets found", Duration = 2 })
+        return
+    end
+    -- Сохраняем исходные позиции
+    local originalPositions = {}
+    for _, p in ipairs(flingList) do
+        local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            originalPositions[p] = hrp.CFrame
+        end
+    end
+    -- Флинг: придаём высокую скорость вверх и в сторону
+    for _, p in ipairs(flingList) do
+        local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local vel = Vector3.new(math.random(-500, 500), 300, math.random(-500, 500))
+            hrp.Velocity = vel
+        end
+    end
+    task.wait(0.2)
+    -- Возвращаем обратно
+    for p, cf in pairs(originalPositions) do
+        local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            hrp.CFrame = cf
+            hrp.Velocity = Vector3.zero
+        end
+    end
+    Fluent:Notify({ Title = "Fling", Content = #flingList .. " player(s) flung", Duration = 2 })
+end
 
 -- ========================================================
 -- 🎯 AIMBOT
@@ -356,7 +514,7 @@ RunS.RenderStepped:Connect(function()
 end)
 
 -- ========================================================
--- 👥 ESP (HIGHLIGHT + ПЛАВНЫЕ ИМЕНА)
+-- 👥 ESP (HIGHLIGHT + ИМЕНА)
 -- ========================================================
 local NameTextObjects = {}
 
@@ -372,16 +530,16 @@ local function UpdateHighlight(p)
     local role = GetRole(p)
     local highlight = p.Character:FindFirstChild("Catalyst_Highlight")
     local shouldShow = false
-    local color = Color3.new(1,1,1)
+    local baseColor = Color3.new(1,1,1)
     if role == "Murderer" and Options.KillerESP and Options.KillerESP.Value then
         shouldShow = true
-        color = Options.KillerESPColor and Options.KillerESPColor.Value or Color3.fromRGB(255,0,0)
+        baseColor = Options.KillerESPColor and Options.KillerESPColor.Value or Color3.fromRGB(255,0,0)
     elseif role == "Sheriff" and Options.SherifESP and Options.SherifESP.Value then
         shouldShow = true
-        color = Options.SherifESPColor and Options.SherifESPColor.Value or Color3.fromRGB(0,0,255)
+        baseColor = Options.SherifESPColor and Options.SherifESPColor.Value or Color3.fromRGB(0,0,255)
     elseif role == "Innocent" and Options.InnocentESP and Options.InnocentESP.Value then
         shouldShow = true
-        color = Options.InnocentESPColor and Options.InnocentESPColor.Value or Color3.fromRGB(0,255,0)
+        baseColor = Options.InnocentESPColor and Options.InnocentESPColor.Value or Color3.fromRGB(0,255,0)
     end
     if shouldShow then
         if not highlight then
@@ -389,8 +547,11 @@ local function UpdateHighlight(p)
             highlight.Name = "Catalyst_Highlight"
             highlight.Parent = p.Character
         end
-        highlight.FillColor = color
-        highlight.OutlineColor = color
+        -- Делаем обводку на 20% темнее
+        local h, s, v = baseColor:ToHSV()
+        local darker = Color3.fromHSV(h, s, math.max(v * 0.8, 0))
+        highlight.FillColor = darker
+        highlight.OutlineColor = baseColor
         highlight.FillTransparency = 0.4
         highlight.OutlineTransparency = 0
     elseif highlight then
@@ -398,7 +559,7 @@ local function UpdateHighlight(p)
     end
 end
 
--- Плавное обновление имён (каждый кадр, но без пересоздания объектов)
+-- Имена ESP (обновляются в RenderStepped)
 RunS.RenderStepped:Connect(function()
     for _, p in pairs(Plrs:GetPlayers()) do
         if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
@@ -482,104 +643,6 @@ InnocentTextESP:OnChanged(ClearTextCache)
 InnocentTextColor:OnChanged(ClearTextCache)
 
 -- ========================================================
--- 🧪 DEV TAB (ПОЛНОСТЬЮ РАБОЧИЙ)
--- ========================================================
-Tabs.Dev:AddSection("Cursor Info")
-local cursorInfoPara = Tabs.Dev:AddParagraph({ Title = "Target", Content = "Move mouse over any object" })
-local cursorToggle = Tabs.Dev:AddToggle("CursorInfo", { Title = "Enable Cursor Info", Default = true })
-
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if not cursorToggle or not cursorToggle.Value then continue end
-        local mouse = UIS:GetMouseLocation()
-        local ray = Cam:ScreenPointToRay(mouse.X, mouse.Y)
-        local part, hitPos = workspace:FindPartOnRay(Ray.new(ray.Origin, ray.Direction * 1000), LP.Character)
-        if part then
-            local info = string.format("Object: %s\nClass: %s\nName: %s\nChildren: %d\nParent: %s\nColor: %s\nMaterial: %s",
-                part:GetFullName(), part.ClassName, part.Name, #part:GetChildren(), part.Parent and part.Parent.Name or "nil",
-                tostring(part.Color), tostring(part.Material))
-            cursorInfoPara:SetContent(info)
-        else
-            cursorInfoPara:SetContent("No object in sight")
-        end
-    end
-end)
-
-Tabs.Dev:AddSection("Remote Logger")
-local remoteLogPara = Tabs.Dev:AddParagraph({ Title = "Last 3 Remotes", Content = "None" })
-local remoteLogs = {}
-local function logRemote(name, args)
-    table.insert(remoteLogs, 1, { time = os.date("%H:%M:%S"), name = name, args = tostring(args) })
-    if #remoteLogs > 3 then table.remove(remoteLogs) end
-    local text = ""
-    for _, log in ipairs(remoteLogs) do
-        text = text .. string.format("[%s] %s → %s\n", log.time, log.name, log.args)
-    end
-    remoteLogPara:SetContent(text)
-end
-
--- Безопасный перехват ремотов (если getrawmetatable недоступен – пропускаем)
-pcall(function()
-    local oldMeta = getrawmetatable(game)
-    if oldMeta then
-        setreadonly(oldMeta, false)
-        local oldNamecall = oldMeta.__namecall
-        oldMeta.__namecall = newcclosure(function(self, ...)
-            local args = {...}
-            if string.find(getnamecallmethod(), "FireServer") and (self:IsA("RemoteEvent") or self:IsA("RemoteFunction")) then
-                logRemote(self.Name, args)
-            end
-            return oldNamecall(self, ...)
-        end)
-        setreadonly(oldMeta, true)
-    end
-end)
-
-Tabs.Dev:AddSection("Cheater Detection")
-local detectedCheatersPara = Tabs.Dev:AddParagraph({ Title = "Suspected Cheaters", Content = "None" })
-local autoDetectToggle = Tabs.Dev:AddToggle("AutoDetect", { Title = "Auto Scan (every 5s)", Default = false })
-
--- Отдельная функция детекта
-local function detectCheaters()
-    local suspects = {}
-    for _, p in pairs(Plrs:GetPlayers()) do
-        if p ~= LP and p.Character and p.Character:FindFirstChild("Humanoid") then
-            local hum = p.Character.Humanoid
-            local speed = hum.WalkSpeed
-            if speed > 18 then
-                table.insert(suspects, p.Name .. " (Speed: " .. math.floor(speed) .. ")")
-            end
-            local root = p.Character:FindFirstChild("HumanoidRootPart")
-            if root and root.CanCollide == false then
-                table.insert(suspects, p.Name .. " (Noclip)")
-            end
-        end
-    end
-    if #suspects > 0 then
-        detectedCheatersPara:SetContent(table.concat(suspects, "\n"))
-        Fluent:Notify({ Title = "Cheaters Detected", Content = #suspects .. " player(s) suspicious", Duration = 3 })
-    else
-        detectedCheatersPara:SetContent("None found")
-        Fluent:Notify({ Title = "Scan Complete", Content = "No cheaters detected", Duration = 2 })
-    end
-end
-
-Tabs.Dev:AddButton({
-    Title = "Scan Now",
-    Callback = function() pcall(detectCheaters) end
-})
-
-task.spawn(function()
-    while true do
-        task.wait(5)
-        if autoDetectToggle and autoDetectToggle.Value then
-            pcall(detectCheaters)
-        end
-    end
-end)
-
--- ========================================================
 -- 🏃‍♂️ MISC (NOCLIP, FLY, SPEED)
 -- ========================================================
 RunS.RenderStepped:Connect(function()
@@ -616,7 +679,7 @@ UIS.JumpRequest:Connect(function()
 end)
 
 -- ========================================================
--- 💾 SAVE MANAGER (НАСТРОЙКИ)
+-- 💾 SAVE MANAGER
 -- ========================================================
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
@@ -627,10 +690,8 @@ InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 SaveManager:BuildConfigSection(Tabs.Settings)
 SaveManager:LoadAutoloadConfig()
 
--- Выбор вкладки Home (первая)
 Window:SelectTab(1)
 
--- Очистка при смене персонажа
 LP.CharacterAdded:Connect(function()
     ClearNameESP()
     for _, text in pairs(NameTextObjects) do if text then pcall(text.Remove, text) end end
