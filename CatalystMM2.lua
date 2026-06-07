@@ -1,14 +1,33 @@
 -- ========================================================
--- CATALYST MM2 v3.9 (FIXED COIN_SERVER + AUTO KILL)
+-- CATALYST MM2 v3.9.1 (FIXED LOADSTRING ERROR)
 -- ========================================================
 local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
 
 local isMobile = UIS.TouchEnabled or not UIS.MouseEnabled
 
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+-- Безопасная загрузка с повторными попытками
+local function LoadLibrary(url, name)
+    for i = 1, 3 do
+        local success, result = pcall(game.HttpGet, game, url)
+        if success and type(result) == "string" and #result > 100 then
+            local func, err = loadstring(result)
+            if func then
+                return func()
+            else
+                warn("[Catalyst] Error compiling " .. name .. ": " .. err)
+            end
+        else
+            warn("[Catalyst] Failed to download " .. name .. ", attempt " .. i)
+        end
+        task.wait(1)
+    end
+    error("[Catalyst] Could not load " .. name)
+end
+
+local Fluent = LoadLibrary("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua", "Fluent")
+local SaveManager = LoadLibrary("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua", "SaveManager")
+local InterfaceManager = LoadLibrary("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua", "InterfaceManager")
 
 _G.CatalystKeyType = _G.CatalystKeyType or "Free"
 _G.CatalystRank = _G.CatalystRank or "Standard"
@@ -185,7 +204,7 @@ local function AutoKillFarm()
     end
 end
 
--- ========== ПОИСК COIN_SERVER (ИСПРАВЛЕНО) ==========
+-- ========== ПОИСК COIN_SERVER ==========
 local CoinServerPart = nil
 local lastCoinLog = 0
 local coinLogCount = 0
@@ -205,7 +224,7 @@ local function GetCoinServer()
             return CoinServerPart
         end
     end
-    -- Логируем в консоль с группировкой (без спама)
+    -- Логируем в консоль с группировкой
     local now = tick()
     if now - lastCoinLog > 5 then
         coinLogCount = 1
@@ -242,7 +261,7 @@ end
 
 -- ========== GUI ==========
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v3.9" .. (isMobile and " [Mobile]" or ""),
+    Title = "Catalyst v3.9.1" .. (isMobile and " [Mobile]" or ""),
     SubTitle = "MM2",
     TabWidth = 160,
     Size = UDim2.fromOffset(660, 620),
@@ -261,7 +280,7 @@ local Options = Fluent.Options
 
 -- Home
 local rankText = (_G.CatalystKeyType or "Free") .. " / " .. (_G.CatalystRank or "Standard")
-Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 3.9" })
+Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 3.9.1" })
 Tabs.Home:AddButton({ Title = "Copy Discord", Callback = function() setclipboard("alchemistslimee") Fluent:Notify({ Title = "Copied" }) end })
 
 -- ========== COMBAT TAB ==========
@@ -325,7 +344,7 @@ local cheatPara = Tabs.Misc:AddParagraph({ Title = "Suspects", Content = "None" 
 local autoCheat = Tabs.Misc:AddToggle("autoCheat", { Title = "Auto Scan", Default = false })
 Tabs.Misc:AddButton({ Title = "Scan Now", Callback = function() detectCheaters() end })
 
--- ========== GUN DROP КОД (БЕЗ ИЗМЕНЕНИЙ) ==========
+-- ========== GUN DROP КОД ==========
 local gunDropPart = nil
 local gunDropHighlight = nil
 local gunDropText = nil
