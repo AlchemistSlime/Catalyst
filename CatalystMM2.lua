@@ -1,5 +1,5 @@
 -- ========================================================
--- CATALYST MM2 v4.0 (TWIN FLIGHT, NO KILL, MOBILE OPTIMIZED)
+-- CATALYST MM2 v4.1 (TP TO GUN + FAST COIN TP)
 -- ========================================================
 local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
@@ -14,16 +14,15 @@ local success, err = pcall(function()
     InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 end)
 if not success then
-    warn("[Catalyst] Failed to load Fluent libraries: " .. tostring(err))
-    -- Запасной вариант: просто уведомление и выключение
-    game:GetService("StarterGui"):SetCore("SendNotification", {Title="Catalyst Error", Text="Failed to load UI. Check internet.", Duration=5})
+    warn("[Catalyst] Failed to load Fluent: " .. tostring(err))
+    game:GetService("StarterGui"):SetCore("SendNotification", {Title="Catalyst Error", Text="Failed to load UI", Duration=5})
     return
 end
 
 _G.CatalystKeyType = _G.CatalystKeyType or "Free"
 _G.CatalystRank = _G.CatalystRank or "Standard"
 
--- ========== ОПРЕДЕЛЕНИЕ РОЛЕЙ (кэшированное) ==========
+-- ========== ОПРЕДЕЛЕНИЕ РОЛЕЙ ==========
 local roleCache = {}
 local lastRoleUpdate = 0
 
@@ -54,11 +53,10 @@ local function HasGun()
     return char and (char:FindFirstChild("Gun") or char:FindFirstChild("Revolver")) ~= nil
 end
 
--- ========== ПОИСК GUN DROP (Tool в workspace) ==========
+-- ========== ПОИСК GUN DROP ==========
 local function FindGunDrop()
     for _, obj in ipairs(workspace:GetChildren()) do
         if obj:IsA("Tool") and (obj.Name == "Gun" or obj.Name == "Revolver") then
-            -- Возвращаем часть для подсветки/телепорта
             local part = obj:FindFirstChild("Handle") or obj:FindFirstChildWhichIsA("BasePart")
             if part then return part end
         end
@@ -66,37 +64,46 @@ local function FindGunDrop()
     return nil
 end
 
--- ========== ТВИН (быстрый полёт) к Gun Drop ==========
-local function TwinToGunDrop()
-    local gd = FindGunDrop()
-    if not gd then
-        Fluent:Notify({ Title = "Gun Drop", Content = "No gun found", Duration = 1 })
+-- ========== ТЕЛЕПОРТ К GUN DROP (с возвратом) ==========
+local tpCooldown = false
+local lastTP = 0
+local cooldownPara = nil
+
+local function TeleportToGunDrop(returnBack)
+    if tpCooldown then
+        if cooldownPara then cooldownPara:SetContent("Cooldown " .. math.ceil(3 - (tick() - lastTP)) .. "s") end
         return false
     end
+    if HasGun() then return false end
+    local gd = FindGunDrop()
+    if not gd then return false end
     local char = LP.Character
     if not char then return false end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
-    -- Отключаем гравитацию и придаём высокую скорость к цели
-    local bodyVel = Instance.new("BodyVelocity")
-    bodyVel.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-    bodyVel.Velocity = (gd.Position - hrp.Position).Unit * 200
-    bodyVel.Parent = hrp
-    task.wait(0.2)
-    bodyVel:Destroy()
-    -- Заодно можно немного подправить позицию, чтобы точно взять
+    local orig = hrp.CFrame
     hrp.CFrame = gd.CFrame * CFrame.new(0, 2, 0)
-    Fluent:Notify({ Title = "Gun Drop", Content = "Twin flight completed", Duration = 1 })
+    task.wait(0.1)
+    if returnBack and hrp and hrp.Parent then
+        hrp.CFrame = orig
+    end
+    tpCooldown = true
+    lastTP = tick()
+    if cooldownPara then cooldownPara:SetContent("Cooldown 3s") end
+    task.wait(3)
+    tpCooldown = false
+    if cooldownPara then cooldownPara:SetContent("Ready") end
     return true
 end
 
--- ========== АВТОФАРМ МОНЕТ (Coin_Server) ==========
+-- ========== АВТОФАРМ МОНЕТ (быстрый TP с проверкой видимости) ==========
 local CoinServerPart = nil
 local lastCoinLog = 0
 local coinLogCount = 0
 
 local function GetCoinServer()
     if CoinServerPart and CoinServerPart.Parent then return CoinServerPart end
+    -- Ищем Coin_Server в CoinContainer или глубже
     local container = workspace:FindFirstChild("CoinContainer")
     if container then
         CoinServerPart = container:FindFirstChild("Coin_Server") or container:FindFirstChild("CoinServer")
@@ -108,7 +115,7 @@ local function GetCoinServer()
             return CoinServerPart
         end
     end
-    -- Логируем в консоль редко
+    -- Логируем редко
     local now = tick()
     if now - lastCoinLog > 5 then
         coinLogCount = 1
@@ -128,6 +135,7 @@ local function FarmCoins()
     if farmCooldown then return end
     local cs = GetCoinServer()
     if not cs then return end
+    -- Проверка видимости (можно опционально)
     local char = LP.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -135,15 +143,17 @@ local function FarmCoins()
     farmCooldown = true
     local orig = hrp.CFrame
     hrp.CFrame = cs.CFrame * CFrame.new(0, 2, 0)
-    task.wait(0.2)
-    if hrp and hrp.Parent then hrp.CFrame = orig end
-    task.wait(0.5)
+    task.wait(0.15)  -- быстрее
+    if hrp and hrp.Parent then
+        hrp.CFrame = orig
+    end
+    task.wait(0.3)
     farmCooldown = false
 end
 
--- ========== GUI (только базовые функции) ==========
+-- ========== GUI ==========
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v4.0" .. (isMobile and " [Mobile]" or ""),
+    Title = "Catalyst v4.1" .. (isMobile and " [Mobile]" or ""),
     SubTitle = "MM2",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 480),
@@ -162,7 +172,7 @@ local Options = Fluent.Options
 
 -- Home
 local rankText = (_G.CatalystKeyType or "Free") .. " / " .. (_G.CatalystRank or "Standard")
-Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 4.0 (Twin Flight)" })
+Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 4.1 (Fast TP)" })
 Tabs.Home:AddButton({ Title = "Copy Discord", Callback = function() setclipboard("alchemistslimee") Fluent:Notify({ Title = "Copied" }) end })
 
 -- ========== COMBAT TAB ==========
@@ -176,22 +186,25 @@ if not isMobile then
     local fovColor = Tabs.Combat:AddColorpicker("fovColor", { Title = "FOV Color", Default = Color3.fromRGB(255,255,255) })
 end
 
-Tabs.Combat:AddSection("Gun Drop")
-local twinBtn = Tabs.Combat:AddButton({ Title = "Twin to Gun (fly fast)", Callback = function() TwinToGunDrop() end })
-local autoTwin = Tabs.Combat:AddToggle("autoTwin", { Title = "Auto Twin every 2s", Default = false })
+Tabs.Combat:AddSection("Gun Drop Teleport")
+local tpBtn = Tabs.Combat:AddButton({ Title = "TP to Gun (once)", Callback = function() TeleportToGunDrop(true) end })
+local autoTP = Tabs.Combat:AddToggle("autoTP", { Title = "Auto TP every 2s", Default = false })
+cooldownPara = Tabs.Combat:AddParagraph({ Title = "Cooldown", Content = "Ready" })
 
 Tabs.Combat:AddSection("Coin Farm")
 local farmBtn = Tabs.Combat:AddButton({ Title = "Farm Coins (once)", Callback = function() FarmCoins() end })
 local autoFarm = Tabs.Combat:AddToggle("autoFarm", { Title = "Auto Farm Coins (every 2s)", Default = false })
 
--- ========== VISUALS TAB ==========
-Tabs.Visuals:AddSection("ESP (Highlight only on mobile)")
+-- ========== VISUALS TAB (только подсветка, без Drawing на телефоне) ==========
+Tabs.Visuals:AddSection("Highlight ESP")
 local murHighlight = Tabs.Visuals:AddToggle("murHl", { Title = "Highlight Murderer", Default = false })
 local murColor = Tabs.Visuals:AddColorpicker("murCol", { Title = "Color", Default = Color3.fromRGB(255,0,0) })
 local sherHighlight = Tabs.Visuals:AddToggle("sherHl", { Title = "Highlight Sheriff", Default = false })
 local sherColor = Tabs.Visuals:AddColorpicker("sherCol", { Title = "Color", Default = Color3.fromRGB(0,0,255) })
 local innocHighlight = Tabs.Visuals:AddToggle("innHl", { Title = "Highlight Innocent", Default = false })
 local innocColor = Tabs.Visuals:AddColorpicker("innCol", { Title = "Color", Default = Color3.fromRGB(0,255,0) })
+local gdHighlight = Tabs.Visuals:AddToggle("gdHl", { Title = "Highlight Gun", Default = false })
+local gdColor = Tabs.Visuals:AddColorpicker("gdCol", { Title = "Color", Default = Color3.fromRGB(128,0,255) })
 
 if not isMobile then
     Tabs.Visuals:AddSection("Name ESP (PC only)")
@@ -203,19 +216,14 @@ if not isMobile then
     local innocTxtColor = Tabs.Visuals:AddColorpicker("innTxtCol", { Title = "Text Color", Default = Color3.fromRGB(0,255,0) })
 end
 
--- Gun Drop highlight
-Tabs.Visuals:AddSection("Gun Drop")
-local gdHighlight = Tabs.Visuals:AddToggle("gdHl", { Title = "Highlight Gun", Default = false })
-local gdColor = Tabs.Visuals:AddColorpicker("gdCol", { Title = "Color", Default = Color3.fromRGB(128,0,255) })
-
 -- ========== MISC TAB ==========
 Tabs.Misc:AddSection("Movement")
 local noclip = Tabs.Misc:AddToggle("noclip", { Title = "No-Clip", Default = false })
 local fly = Tabs.Misc:AddToggle("fly", { Title = "Fly", Default = false })
 local speed = Tabs.Misc:AddToggle("speed", { Title = "Speedhack", Default = false })
-local speedVal = Tabs.Misc:AddSlider("speedVal", { Title = "Speed", Default =50, Min=16, Max=250, Rounding=0 })
+local speedVal = Tabs.Misc:AddSlider("speedVal", { Title = "Speed", Default = 50, Min = 16, Max = 250, Rounding = 0 })
 
--- ========== ЛОГИКА ESP (без Drawing на телефоне) ==========
+-- ========== ESP HIGHLIGHT (без Drawing на телефоне) ==========
 local function UpdateHighlight(p)
     if not p or p == LP or not p.Character then return end
     local role = GetRole(p)
@@ -282,7 +290,7 @@ task.spawn(function()
     end
 end)
 
--- Имена ESP только для ПК (через Drawing)
+-- Имена ESP для ПК (через Drawing)
 if not isMobile then
     local nameTexts = {}
     local function ClearNameESP()
@@ -369,12 +377,12 @@ UIS.JumpRequest:Connect(function()
     end
 end)
 
--- ========== АВТОТВИН И АВТОФАРМ ==========
+-- ========== АВТО-ТП И АВТОФАРМ ==========
 task.spawn(function()
     while true do
         task.wait(2)
-        if autoTwin and autoTwin.Value then
-            pcall(TwinToGunDrop)
+        if autoTP and autoTP.Value then
+            pcall(TeleportToGunDrop, true)
         end
         if autoFarm and autoFarm.Value then
             pcall(FarmCoins)
