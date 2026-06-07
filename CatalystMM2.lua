@@ -1,5 +1,5 @@
 -- ========================================================
--- CATALYST MM2 v3.1 (FULLY WORKING)
+-- CATALYST MM2 v3.2 (ВСЁ РАБОТАЕТ)
 -- ========================================================
 local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
@@ -12,6 +12,7 @@ local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.
 -- ========== ГЛОБАЛЬНЫЕ НАСТРОЙКИ ==========
 _G.CatalystKeyType = _G.CatalystKeyType or "Free"
 _G.CatalystRank = _G.CatalystRank or "Standard"
+_G.CatalystOptions = {}  -- сюда будут сохранены все настройки из GUI
 
 -- ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 local roleCache = {}
@@ -74,28 +75,25 @@ local function FindGunDrop()
     return nil
 end
 
--- ========== ФУНКЦИИ, КОТОРЫЕ БУДУТ ИСПОЛЬЗОВАТЬСЯ В КНОПКАХ (ОПРЕДЕЛЕНЫ РАНЬШЕ) ==========
--- Teleport to Gun Drop
+-- ========== ФУНКЦИИ ДЕЙСТВИЙ ==========
 local tpCooldown = false
 local lastTP = 0
-local cooldownPara = nil  -- будет заполнено позже
 
 function TeleportToGunDrop(returnBack)
     if tpCooldown then
-        if cooldownPara then
-            cooldownPara:SetContent("Cooldown " .. math.ceil(3 - (tick() - lastTP)) .. "s")
+        if _G.CatalystOptions.cooldownPara then
+            _G.CatalystOptions.cooldownPara:SetContent("Cooldown " .. math.ceil(3 - (tick() - lastTP)) .. "s")
         end
         return false
     end
     if HasRevolver() then return false end
     local gd = FindGunDrop()
     if not gd then return false end
-    if Options.safeTP and Options.safeTP.Value then
+    if _G.CatalystOptions.safeTP and _G.CatalystOptions.safeTP.Value then
         for _, p in pairs(Plrs:GetPlayers()) do
             if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and GetRole(p) == "Murderer" then
-                local dist = (p.Character.HumanoidRootPart.Position - LP.Character.HumanoidRootPart.Position).Magnitude
-                if dist < 5 then
-                    Fluent:Notify({ Title = "Safe TP", Content = "Murderer nearby, blocked", Duration = 1.5 })
+                if (p.Character.HumanoidRootPart.Position - LP.Character.HumanoidRootPart.Position).Magnitude < 5 then
+                    Fluent:Notify({ Title = "Safe TP", Content = "Murderer nearby", Duration = 1.5 })
                     return false
                 end
             end
@@ -105,24 +103,23 @@ function TeleportToGunDrop(returnBack)
     if not char then return false end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
-    local originalPos = hrp.CFrame
+    local orig = hrp.CFrame
     hrp.CFrame = gd.CFrame * CFrame.new(0, 2, 0)
     task.wait(0.1)
     if returnBack and hrp and hrp.Parent then
-        hrp.CFrame = originalPos
+        hrp.CFrame = orig
     end
     tpCooldown = true
     lastTP = tick()
-    if cooldownPara then cooldownPara:SetContent("Cooldown 3s") end
+    if _G.CatalystOptions.cooldownPara then _G.CatalystOptions.cooldownPara:SetContent("Cooldown 3s") end
     task.wait(3)
     tpCooldown = false
-    if cooldownPara then cooldownPara:SetContent("Ready") end
+    if _G.CatalystOptions.cooldownPara then _G.CatalystOptions.cooldownPara:SetContent("Ready") end
     return true
 end
 
--- Fling функция
 function FlingPlayers(targetType)
-    local blacklist = (Options.blacklist and Options.blacklist.Value) or {}
+    local blacklist = (_G.CatalystOptions.blacklist and _G.CatalystOptions.blacklist.Value) or {}
     local targets = {}
     for _, p in pairs(Plrs:GetPlayers()) do
         if p ~= LP and not table.find(blacklist, p.Name) then
@@ -140,16 +137,16 @@ function FlingPlayers(targetType)
         Fluent:Notify({ Title = "Fling", Content = "No targets", Duration = 2 })
         return
     end
-    local originalPositions = {}
+    local origPos = {}
     for _, p in ipairs(targets) do
         local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
-            originalPositions[p] = hrp.CFrame
+            origPos[p] = hrp.CFrame
             hrp.CFrame = hrp.CFrame * CFrame.new(0, 50, 0)
         end
     end
     task.wait(0.3)
-    for p, cf in pairs(originalPositions) do
+    for p, cf in pairs(origPos) do
         local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
             hrp.CFrame = cf
@@ -159,7 +156,6 @@ function FlingPlayers(targetType)
     Fluent:Notify({ Title = "Fling", Content = #targets .. " player(s) flung", Duration = 2 })
 end
 
--- Cheater detection
 function ScanCheaters()
     local suspects = {}
     for _, p in pairs(Plrs:GetPlayers()) do
@@ -174,21 +170,22 @@ function ScanCheaters()
             end
         end
     end
-    if #suspects > 0 then
-        if cheatPara then cheatPara:SetContent(table.concat(suspects, "\n")) end
-        Fluent:Notify({ Title = "Cheaters", Content = #suspects .. " found", Duration = 2 })
-    else
-        if cheatPara then cheatPara:SetContent("None found") end
-        Fluent:Notify({ Title = "Scan", Content = "Clean", Duration = 2 })
+    if _G.CatalystOptions.cheatPara then
+        if #suspects > 0 then
+            _G.CatalystOptions.cheatPara:SetContent(table.concat(suspects, "\n"))
+        else
+            _G.CatalystOptions.cheatPara:SetContent("None found")
+        end
     end
+    Fluent:Notify({ Title = "Cheaters", Content = (#suspects > 0 and #suspects .. " found" or "Clean"), Duration = 2 })
 end
 
--- ========== GUI (СОЗДАНИЕ ОКНА ПОСЛЕ ОПРЕДЕЛЕНИЯ ФУНКЦИЙ) ==========
+-- ========== СОЗДАНИЕ GUI ==========
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v3.1",
+    Title = "Catalyst v3.2",
     SubTitle = "MM2",
     TabWidth = 160,
-    Size = UDim2.fromOffset(620, 520),
+    Size = UDim2.fromOffset(640, 540),
     Acrylic = false,
     Theme = "Dark"
 })
@@ -200,44 +197,41 @@ local Tabs = {
     Misc = Window:AddTab({ Title = "Misc", Icon = "star" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
-Options = Fluent.Options
 
 -- Home
 local rankText = (_G.CatalystKeyType or "Free") .. " / " .. (_G.CatalystRank or "Standard")
 Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMurder Mystery 2\nDeveloper: Alchemist Slime\nTG: @alchemistslimee" })
 Tabs.Home:AddButton({ Title = "Copy Discord Tag", Callback = function() setclipboard("alchemistslimee") Fluent:Notify({ Title = "Copied", Content = "alchemistslimee", Duration = 2 }) end })
-Tabs.Home:AddSection("Version 3.1")
-Tabs.Home:AddParagraph({ Title = "Changelog", Content = "• Fixed function order\n• Gun ESP: bright fill + dark outline\n• All features working" })
 
 -- ========== COMBAT TAB ==========
 Tabs.Combat:AddSection("Aimbot")
-local aimToggle = Tabs.Combat:AddToggle("aim", { Title = "Enable Aimbot", Default = false })
-local predToggle = Tabs.Combat:AddToggle("pred", { Title = "Prediction", Default = false })
-local predSlider = Tabs.Combat:AddSlider("predDelay", { Title = "Prediction ms", Default = 80, Min = 0, Max = 100 })
-local fovSlider = Tabs.Combat:AddSlider("fov", { Title = "FOV Degrees", Default = 80, Min = 1, Max = 360 })
-local fovColor = Tabs.Combat:AddColorpicker("fovColor", { Title = "FOV Color", Default = Color3.fromRGB(255, 255, 255) })
-local aimKey = Tabs.Combat:AddKeybind("aimKey", { Title = "Aimbot Key", Mode = "Hold", Default = "MouseRight" })
+_G.CatalystOptions.aimToggle = Tabs.Combat:AddToggle("aim", { Title = "Enable Aimbot", Default = false })
+_G.CatalystOptions.predToggle = Tabs.Combat:AddToggle("pred", { Title = "Prediction", Default = false })
+_G.CatalystOptions.predSlider = Tabs.Combat:AddSlider("predDelay", { Title = "Prediction ms", Default = 80, Min = 0, Max = 100 })
+_G.CatalystOptions.fovSlider = Tabs.Combat:AddSlider("fov", { Title = "FOV Degrees", Default =80, Min = 1, Max = 360 })
+_G.CatalystOptions.fovColor = Tabs.Combat:AddColorpicker("fovColor", { Title = "FOV Color", Default = Color3.fromRGB(255, 255, 255) })
+_G.CatalystOptions.aimKey = Tabs.Combat:AddKeybind("aimKey", { Title = "Aimbot Key", Mode = "Hold", Default = "MouseRight" })
 
 Tabs.Combat:AddSection("Gun Drop Teleport")
-local tpBtn = Tabs.Combat:AddButton({ Title = "TP to Gun Drop (once)", Callback = function() TeleportToGunDrop(true) end })
-local autoTP = Tabs.Combat:AddToggle("autoTP", { Title = "Auto TP every 1s", Default = false })
-local safeTP = Tabs.Combat:AddToggle("safeTP", { Title = "Avoid Murderer within 5 studs", Default = true })
-cooldownPara = Tabs.Combat:AddParagraph({ Title = "Cooldown", Content = "Ready" })  -- заполняем глобальную переменную
+_G.CatalystOptions.tpBtn = Tabs.Combat:AddButton({ Title = "TP to Gun Drop (once)", Callback = function() TeleportToGunDrop(true) end })
+_G.CatalystOptions.autoTP = Tabs.Combat:AddToggle("autoTP", { Title = "Auto TP every 1s", Default = false })
+_G.CatalystOptions.safeTP = Tabs.Combat:AddToggle("safeTP", { Title = "Avoid Murderer within 5 studs", Default = true })
+_G.CatalystOptions.cooldownPara = Tabs.Combat:AddParagraph({ Title = "Cooldown", Content = "Ready" })
 
 Tabs.Combat:AddSection("Fling")
-local antiFling = Tabs.Combat:AddToggle("antiFling", { Title = "Anti-Fling (basic)", Default = false })
-local flingAll = Tabs.Combat:AddButton({ Title = "Fling All", Callback = function() FlingPlayers("All") end })
-local flingMurder = Tabs.Combat:AddButton({ Title = "Fling Murderers", Callback = function() FlingPlayers("Murderer") end })
-local flingSheriff = Tabs.Combat:AddButton({ Title = "Fling Sheriffs", Callback = function() FlingPlayers("Sheriff") end })
+_G.CatalystOptions.antiFling = Tabs.Combat:AddToggle("antiFling", { Title = "Anti-Fling (basic)", Default = false })
+_G.CatalystOptions.flingAll = Tabs.Combat:AddButton({ Title = "Fling All", Callback = function() FlingPlayers("All") end })
+_G.CatalystOptions.flingMurder = Tabs.Combat:AddButton({ Title = "Fling Murderers", Callback = function() FlingPlayers("Murderer") end })
+_G.CatalystOptions.flingSheriff = Tabs.Combat:AddButton({ Title = "Fling Sheriffs", Callback = function() FlingPlayers("Sheriff") end })
 
 Tabs.Combat:AddSection("Blacklist")
-local blacklistDropdown = Tabs.Combat:AddDropdown("blacklist", { Title = "Do NOT fling these players", Values = {}, Multi = true, Default = {} })
+_G.CatalystOptions.blacklist = Tabs.Combat:AddDropdown("blacklist", { Title = "Do NOT fling these players", Values = {}, Multi = true, Default = {} })
 local function RefreshBlacklist()
     local names = {}
     for _, p in pairs(Plrs:GetPlayers()) do
         if p ~= LP then table.insert(names, p.Name) end
     end
-    blacklistDropdown:SetValues(names)
+    _G.CatalystOptions.blacklist:SetValues(names)
 end
 RefreshBlacklist()
 Plrs.PlayerAdded:Connect(RefreshBlacklist)
@@ -246,45 +240,58 @@ Plrs.PlayerRemoving:Connect(RefreshBlacklist)
 -- ========== VISUALS TAB ==========
 -- Murderer
 Tabs.Visuals:AddSection("Murderer")
-local murHighlight = Tabs.Visuals:AddToggle("murHl", { Title = "Highlight Murderer", Default = false })
-local murColor = Tabs.Visuals:AddColorpicker("murCol", { Title = "Highlight Color", Default = Color3.fromRGB(255, 0, 0) })
-local murText = Tabs.Visuals:AddToggle("murTxt", { Title = "Show Name ESP", Default = false })
-local murTxtColor = Tabs.Visuals:AddColorpicker("murTxtCol", { Title = "Name Color", Default = Color3.fromRGB(255, 0, 0) })
-
+_G.CatalystOptions.murHighlight = Tabs.Visuals:AddToggle("murHl", { Title = "Highlight Murderer", Default = false })
+_G.CatalystOptions.murColor = Tabs.Visuals:AddColorpicker("murCol", { Title = "Highlight Color", Default = Color3.fromRGB(255, 0, 0) })
+_G.CatalystOptions.murText = Tabs.Visuals:AddToggle("murTxt", { Title = "Show Name ESP", Default = false })
+_G.CatalystOptions.murTxtColor = Tabs.Visuals:AddColorpicker("murTxtCol", { Title = "Name Color", Default = Color3.fromRGB(255, 0, 0) })
 -- Sheriff
 Tabs.Visuals:AddSection("Sheriff")
-local sherHighlight = Tabs.Visuals:AddToggle("sherHl", { Title = "Highlight Sheriff", Default = false })
-local sherColor = Tabs.Visuals:AddColorpicker("sherCol", { Title = "Highlight Color", Default = Color3.fromRGB(0, 0, 255) })
-local sherText = Tabs.Visuals:AddToggle("sherTxt", { Title = "Show Name ESP", Default = false })
-local sherTxtColor = Tabs.Visuals:AddColorpicker("sherTxtCol", { Title = "Name Color", Default = Color3.fromRGB(0, 0, 255) })
-
+_G.CatalystOptions.sherHighlight = Tabs.Visuals:AddToggle("sherHl", { Title = "Highlight Sheriff", Default = false })
+_G.CatalystOptions.sherColor = Tabs.Visuals:AddColorpicker("sherCol", { Title = "Highlight Color", Default = Color3.fromRGB(0, 0, 255) })
+_G.CatalystOptions.sherText = Tabs.Visuals:AddToggle("sherTxt", { Title = "Show Name ESP", Default = false })
+_G.CatalystOptions.sherTxtColor = Tabs.Visuals:AddColorpicker("sherTxtCol", { Title = "Name Color", Default = Color3.fromRGB(0, 0, 255) })
 -- Innocent
 Tabs.Visuals:AddSection("Innocent")
-local innocHighlight = Tabs.Visuals:AddToggle("innHl", { Title = "Highlight Innocent", Default = false })
-local innocColor = Tabs.Visuals:AddColorpicker("innCol", { Title = "Highlight Color", Default = Color3.fromRGB(0, 255, 0) })
-local innocText = Tabs.Visuals:AddToggle("innTxt", { Title = "Show Name ESP", Default = false })
-local innocTxtColor = Tabs.Visuals:AddColorpicker("innTxtCol", { Title = "Name Color", Default = Color3.fromRGB(0, 255, 0) })
-
--- Gun Drop Visuals (исправлено: фон яркий, обводка тёмная)
+_G.CatalystOptions.innocHighlight = Tabs.Visuals:AddToggle("innHl", { Title = "Highlight Innocent", Default = false })
+_G.CatalystOptions.innocColor = Tabs.Visuals:AddColorpicker("innCol", { Title = "Highlight Color", Default = Color3.fromRGB(0, 255, 0) })
+_G.CatalystOptions.innocText = Tabs.Visuals:AddToggle("innTxt", { Title = "Show Name ESP", Default = false })
+_G.CatalystOptions.innocTxtColor = Tabs.Visuals:AddColorpicker("innTxtCol", { Title = "Name Color", Default = Color3.fromRGB(0, 255, 0) })
+-- Gun Drop
 Tabs.Visuals:AddSection("Gun Drop Visuals")
-local gdHighlight = Tabs.Visuals:AddToggle("gdHl", { Title = "Highlight Gun Drop", Default = false })
-local gdColor = Tabs.Visuals:AddColorpicker("gdCol", { Title = "Highlight Color", Default = Color3.fromRGB(128, 0, 255) })
-local gdText = Tabs.Visuals:AddToggle("gdTxt", { Title = "Show Text", Default = true })
-local gdTxtColor = Tabs.Visuals:AddColorpicker("gdTxtCol", { Title = "Text Color", Default = Color3.fromRGB(255, 255, 255) })
+_G.CatalystOptions.gdHighlight = Tabs.Visuals:AddToggle("gdHl", { Title = "Highlight Gun Drop", Default = false })
+_G.CatalystOptions.gdColor = Tabs.Visuals:AddColorpicker("gdCol", { Title = "Highlight Color", Default = Color3.fromRGB(128, 0, 255) })
+_G.CatalystOptions.gdText = Tabs.Visuals:AddToggle("gdTxt", { Title = "Show Text", Default = true })
+_G.CatalystOptions.gdTxtColor = Tabs.Visuals:AddColorpicker("gdTxtCol", { Title = "Text Color", Default = Color3.fromRGB(255, 255, 255) })
 
 -- ========== MISC TAB ==========
 Tabs.Misc:AddSection("Movement")
-local noclipToggle = Tabs.Misc:AddToggle("noclip", { Title = "No-Clip", Default = false })
-local flyToggle = Tabs.Misc:AddToggle("fly", { Title = "Fly", Default = false })
-local speedToggle = Tabs.Misc:AddToggle("speed", { Title = "Speedhack", Default = false })
-local speedSlider = Tabs.Misc:AddSlider("speedVal", { Title = "Speed (walk)", Default = 50, Min = 16, Max = 250 })
+_G.CatalystOptions.noclip = Tabs.Misc:AddToggle("noclip", { Title = "No-Clip", Default = false })
+_G.CatalystOptions.fly = Tabs.Misc:AddToggle("fly", { Title = "Fly", Default = false })
+_G.CatalystOptions.speed = Tabs.Misc:AddToggle("speed", { Title = "Speedhack", Default = false })
+_G.CatalystOptions.speedVal = Tabs.Misc:AddSlider("speedVal", { Title = "Speed (walk)", Default = 50, Min = 16, Max = 250 })
 
 Tabs.Misc:AddSection("Cheater Detection")
-local cheatPara = Tabs.Misc:AddParagraph({ Title = "Suspicious Players", Content = "None" })
-local autoCheat = Tabs.Misc:AddToggle("autoCheat", { Title = "Auto Scan (every 5s)", Default = false })
+_G.CatalystOptions.cheatPara = Tabs.Misc:AddParagraph({ Title = "Suspicious Players", Content = "None" })
+_G.CatalystOptions.autoCheat = Tabs.Misc:AddToggle("autoCheat", { Title = "Auto Scan (every 5s)", Default = false })
 Tabs.Misc:AddButton({ Title = "Scan Now", Callback = function() ScanCheaters() end })
 
--- ========== ВИЗУАЛЬНЫЕ ЭФФЕКТЫ GUN DROP (ПОСЛЕ СОЗДАНИЯ GUI) ==========
+-- ========== НАСТРОЙКИ И СОХРАНЕНИЕ ==========
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+InterfaceManager:SetFolder("Catalyst")
+SaveManager:SetFolder("Catalyst/MM2")
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+SaveManager:LoadAutoloadConfig()
+
+-- Выбор Home вкладки (исправлено)
+Window:SelectTab(Tabs.Home)
+
+-- ========== ЗАПУСК ВСЕХ ЦИКЛОВ ПОСЛЕ ИНИЦИАЛИЗАЦИИ ==========
+task.wait(0.5)  -- Даём GUI время на создание всех объектов
+
+-- Обновление визуалов Gun Drop
 local function UpdateGunDropVisuals()
     if HasRevolver() then
         if gunDropHighlight then gunDropHighlight:Destroy(); gunDropHighlight = nil end
@@ -295,13 +302,12 @@ local function UpdateGunDropVisuals()
     local gd = FindGunDrop()
     gunDropPart = gd
     if gd then
-        if gdHighlight and gdHighlight.Value then
+        if _G.CatalystOptions.gdHighlight and _G.CatalystOptions.gdHighlight.Value then
             if not gunDropHighlight or gunDropHighlight.Parent ~= gd then
                 if gunDropHighlight then gunDropHighlight:Destroy() end
                 gunDropHighlight = Instance.new("Highlight")
-                local base = gdColor and gdColor.Value or Color3.fromRGB(128, 0, 255)
-                -- Исправлено: фон (FillColor) яркий, обводка (OutlineColor) тёмная
-                local h, s, v = base:ToHSV()
+                local base = _G.CatalystOptions.gdColor and _G.CatalystOptions.gdColor.Value or Color3.fromRGB(128,0,255)
+                local h,s,v = base:ToHSV()
                 local darker = Color3.fromHSV(h, s, math.max(v * 0.8, 0))
                 gunDropHighlight.FillColor = base      -- яркий
                 gunDropHighlight.OutlineColor = darker -- тёмный
@@ -309,21 +315,20 @@ local function UpdateGunDropVisuals()
                 gunDropHighlight.Parent = gd
             end
         elseif gunDropHighlight then
-            gunDropHighlight:Destroy()
-            gunDropHighlight = nil
+            gunDropHighlight:Destroy(); gunDropHighlight = nil
         end
-        if gdText and gdText.Value then
+        if _G.CatalystOptions.gdText and _G.CatalystOptions.gdText.Value then
             if not gunDropText then
                 gunDropText = Drawing.new("Text")
                 gunDropText.Center = true
                 gunDropText.Outline = true
                 gunDropText.Size = 16
             end
-            local pos, on = Cam:WorldToViewportPoint(gd.Position + Vector3.new(0, 1.5, 0))
+            local pos, on = Cam:WorldToViewportPoint(gd.Position + Vector3.new(0,1.5,0))
             if on then
                 gunDropText.Position = Vector2.new(pos.X, pos.Y)
                 gunDropText.Text = "GUN DROP"
-                gunDropText.Color = gdTxtColor and gdTxtColor.Value or Color3.fromRGB(255, 255, 255)
+                gunDropText.Color = _G.CatalystOptions.gdTxtColor and _G.CatalystOptions.gdTxtColor.Value or Color3.fromRGB(255,255,255)
                 gunDropText.Visible = true
             else
                 gunDropText.Visible = false
@@ -344,12 +349,11 @@ task.spawn(function()
     end
 end)
 
+-- Плавное движение текста Gun Drop
 RunS.RenderStepped:Connect(function()
     if gunDropText and gunDropText.Visible and gunDropPart then
-        local pos, on = Cam:WorldToViewportPoint(gunDropPart.Position + Vector3.new(0, 1.5, 0))
-        if on then
-            gunDropText.Position = Vector2.new(pos.X, pos.Y)
-        end
+        local pos, on = Cam:WorldToViewportPoint(gunDropPart.Position + Vector3.new(0,1.5,0))
+        if on then gunDropText.Position = Vector2.new(pos.X, pos.Y) end
     end
 end)
 
@@ -357,18 +361,143 @@ end)
 task.spawn(function()
     while true do
         task.wait(1)
-        if autoTP and autoTP.Value and not tpCooldown and not HasRevolver() then
+        if _G.CatalystOptions.autoTP and _G.CatalystOptions.autoTP.Value and not tpCooldown and not HasRevolver() then
             pcall(TeleportToGunDrop, true)
         end
     end
 end)
 
--- ========== AIMBOT ==========
+-- Anti-Fling
+local lastPos = nil
+RunS.RenderStepped:Connect(function()
+    if _G.CatalystOptions.antiFling and _G.CatalystOptions.antiFling.Value then
+        local char = LP.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            local cur = char.HumanoidRootPart.Position
+            if lastPos and (cur - lastPos).Magnitude > 40 then
+                char.HumanoidRootPart.CFrame = CFrame.new(lastPos)
+                Fluent:Notify({ Title = "Anti-Fling", Content = "Blocked", Duration = 1 })
+            end
+            lastPos = cur
+        end
+    else
+        lastPos = nil
+    end
+end)
+
+-- ========== ESP HIGHLIGHT ==========
+local function UpdateHighlight(p)
+    if not p or p == LP or not p.Character then return end
+    local role = GetRole(p)
+    local hl = p.Character:FindFirstChild("Catalyst_HL")
+    local show = false
+    local base = Color3.new(1,1,1)
+    if role == "Murderer" and _G.CatalystOptions.murHighlight and _G.CatalystOptions.murHighlight.Value then
+        show = true
+        base = _G.CatalystOptions.murColor and _G.CatalystOptions.murColor.Value or Color3.fromRGB(255,0,0)
+    elseif role == "Sheriff" and _G.CatalystOptions.sherHighlight and _G.CatalystOptions.sherHighlight.Value then
+        show = true
+        base = _G.CatalystOptions.sherColor and _G.CatalystOptions.sherColor.Value or Color3.fromRGB(0,0,255)
+    elseif role == "Innocent" and _G.CatalystOptions.innocHighlight and _G.CatalystOptions.innocHighlight.Value then
+        show = true
+        base = _G.CatalystOptions.innocColor and _G.CatalystOptions.innocColor.Value or Color3.fromRGB(0,255,0)
+    end
+    if show then
+        if not hl then
+            hl = Instance.new("Highlight")
+            hl.Name = "Catalyst_HL"
+            hl.Parent = p.Character
+        end
+        local h,s,v = base:ToHSV()
+        local darker = Color3.fromHSV(h, s, math.max(v * 0.8, 0))
+        hl.FillColor = darker
+        hl.OutlineColor = base
+        hl.FillTransparency = 0.4
+    elseif hl then
+        hl:Destroy()
+    end
+end
+
+-- Name ESP
+local nameTexts = {}
+RunS.RenderStepped:Connect(function()
+    for _, p in pairs(Plrs:GetPlayers()) do
+        if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
+            local role = GetRole(p)
+            local show = false
+            local color = Color3.new(1,1,1)
+            if role == "Murderer" and _G.CatalystOptions.murText and _G.CatalystOptions.murText.Value then
+                show = true
+                color = _G.CatalystOptions.murTxtColor and _G.CatalystOptions.murTxtColor.Value or Color3.fromRGB(255,0,0)
+            elseif role == "Sheriff" and _G.CatalystOptions.sherText and _G.CatalystOptions.sherText.Value then
+                show = true
+                color = _G.CatalystOptions.sherTxtColor and _G.CatalystOptions.sherTxtColor.Value or Color3.fromRGB(0,0,255)
+            elseif role == "Innocent" and _G.CatalystOptions.innocText and _G.CatalystOptions.innocText.Value then
+                show = true
+                color = _G.CatalystOptions.innocTxtColor and _G.CatalystOptions.innocTxtColor.Value or Color3.fromRGB(0,255,0)
+            end
+            if show then
+                local root = p.Character.HumanoidRootPart
+                local vec, on = Cam:WorldToViewportPoint(root.Position + Vector3.new(0,2.5,0))
+                if on then
+                    local txt = nameTexts[p]
+                    if not txt then
+                        txt = Drawing.new("Text")
+                        txt.Center = true
+                        txt.Outline = true
+                        txt.Size = 14
+                        nameTexts[p] = txt
+                    end
+                    txt.Text = p.Name .. " (" .. role .. ")"
+                    txt.Position = Vector2.new(vec.X, vec.Y)
+                    txt.Color = color
+                    txt.Visible = true
+                elseif nameTexts[p] then
+                    nameTexts[p].Visible = false
+                end
+            elseif nameTexts[p] then
+                nameTexts[p].Visible = false
+            end
+        elseif nameTexts[p] then
+            nameTexts[p].Visible = false
+        end
+    end
+end)
+
+-- Обновление ролей и подсветки
+task.spawn(function()
+    while true do
+        task.wait(2)
+        UpdateRoleCache()
+        for _, p in pairs(Plrs:GetPlayers()) do
+            pcall(UpdateHighlight, p)
+        end
+    end
+end)
+
+Plrs.PlayerAdded:Connect(function(p)
+    p.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        pcall(UpdateHighlight, p)
+    end)
+end)
+
+local function RefreshHighlights()
+    for _, p in pairs(Plrs:GetPlayers()) do UpdateHighlight(p) end
+end
+_G.CatalystOptions.murHighlight:OnChanged(RefreshHighlights)
+_G.CatalystOptions.murColor:OnChanged(RefreshHighlights)
+_G.CatalystOptions.sherHighlight:OnChanged(RefreshHighlights)
+_G.CatalystOptions.sherColor:OnChanged(RefreshHighlights)
+_G.CatalystOptions.innocHighlight:OnChanged(RefreshHighlights)
+_G.CatalystOptions.innocColor:OnChanged(RefreshHighlights)
+
+-- ========== AIMBOT (с предсказанием) ==========
 local function GetTarget()
     local myRole = GetRole(LP)
     if myRole == "Innocent" then return nil end
     local best, bestAngle = nil, math.huge
-    local fov = fovSlider and fovSlider.Value or 80
+    local fov = _G.CatalystOptions.fovSlider and _G.CatalystOptions.fovSlider.Value or 80
     local maxDist = (fov / 360) * Cam.ViewportSize.X
     local mousePos = UIS:GetMouseLocation()
     for _, p in pairs(Plrs:GetPlayers()) do
@@ -402,11 +531,11 @@ if (typeof(Drawing) == "table" and Drawing.new) then
 end
 
 RunS.RenderStepped:Connect(function()
-    if fovCircle and aimToggle and aimToggle.Value then
+    if fovCircle and _G.CatalystOptions.aimToggle and _G.CatalystOptions.aimToggle.Value then
         fovCircle.Visible = true
-        local f = fovSlider and fovSlider.Value or 80
+        local f = _G.CatalystOptions.fovSlider and _G.CatalystOptions.fovSlider.Value or 80
         fovCircle.Radius = (f / 360) * Cam.ViewportSize.X
-        fovCircle.Color = fovColor and fovColor.Value or Color3.fromRGB(255, 255, 255)
+        fovCircle.Color = _G.CatalystOptions.fovColor and _G.CatalystOptions.fovColor.Value or Color3.fromRGB(255,255,255)
         fovCircle.Position = UIS:GetMouseLocation()
     elseif fovCircle then
         fovCircle.Visible = false
@@ -414,14 +543,14 @@ RunS.RenderStepped:Connect(function()
 end)
 
 RunS.RenderStepped:Connect(function()
-    if not (aimToggle and aimToggle.Value) then return end
-    local press = UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or (aimKey and aimKey:GetState())
+    if not (_G.CatalystOptions.aimToggle and _G.CatalystOptions.aimToggle.Value) then return end
+    local press = UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or (_G.CatalystOptions.aimKey and _G.CatalystOptions.aimKey:GetState())
     if press then
         local target = GetTarget()
         if target then
             local pos = target.Position
-            if predToggle and predToggle.Value then
-                local delay = (predSlider and predSlider.Value or 80) / 1000
+            if _G.CatalystOptions.predToggle and _G.CatalystOptions.predToggle.Value then
+                local delay = (_G.CatalystOptions.predSlider and _G.CatalystOptions.predSlider.Value or 80) / 1000
                 pos = pos + (target.Velocity * delay)
             end
             Cam.CFrame = CFrame.lookAt(Cam.CFrame.Position, pos)
@@ -429,126 +558,24 @@ RunS.RenderStepped:Connect(function()
     end
 end)
 
--- ========== ESP HIGHLIGHT ==========
-local function UpdateHighlight(p)
-    if not p or p == LP or not p.Character then return end
-    local role = GetRole(p)
-    local hl = p.Character:FindFirstChild("Catalyst_HL")
-    local show = false
-    local base = Color3.new(1, 1, 1)
-    if role == "Murderer" and murHighlight and murHighlight.Value then
-        show = true
-        base = murColor and murColor.Value or Color3.fromRGB(255, 0, 0)
-    elseif role == "Sheriff" and sherHighlight and sherHighlight.Value then
-        show = true
-        base = sherColor and sherColor.Value or Color3.fromRGB(0, 0, 255)
-    elseif role == "Innocent" and innocHighlight and innocHighlight.Value then
-        show = true
-        base = innocColor and innocColor.Value or Color3.fromRGB(0, 255, 0)
-    end
-    if show then
-        if not hl then
-            hl = Instance.new("Highlight")
-            hl.Name = "Catalyst_HL"
-            hl.Parent = p.Character
-        end
-        local h, s, v = base:ToHSV()
-        local darker = Color3.fromHSV(h, s, math.max(v * 0.8, 0))
-        hl.FillColor = darker
-        hl.OutlineColor = base
-        hl.FillTransparency = 0.4
-    elseif hl then
-        hl:Destroy()
-    end
-end
-
--- Name ESP
-local nameTexts = {}
-RunS.RenderStepped:Connect(function()
-    for _, p in pairs(Plrs:GetPlayers()) do
-        if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
-            local role = GetRole(p)
-            local show = false
-            local color = Color3.new(1, 1, 1)
-            if role == "Murderer" and murText and murText.Value then
-                show = true
-                color = murTxtColor and murTxtColor.Value or Color3.fromRGB(255, 0, 0)
-            elseif role == "Sheriff" and sherText and sherText.Value then
-                show = true
-                color = sherTxtColor and sherTxtColor.Value or Color3.fromRGB(0, 0, 255)
-            elseif role == "Innocent" and innocText and innocText.Value then
-                show = true
-                color = innocTxtColor and innocTxtColor.Value or Color3.fromRGB(0, 255, 0)
-            end
-            if show then
-                local root = p.Character.HumanoidRootPart
-                local vec, on = Cam:WorldToViewportPoint(root.Position + Vector3.new(0, 2.5, 0))
-                if on then
-                    local txt = nameTexts[p]
-                    if not txt then
-                        txt = Drawing.new("Text")
-                        txt.Center = true
-                        txt.Outline = true
-                        txt.Size = 14
-                        nameTexts[p] = txt
-                    end
-                    txt.Text = p.Name .. " (" .. role .. ")"
-                    txt.Position = Vector2.new(vec.X, vec.Y)
-                    txt.Color = color
-                    txt.Visible = true
-                elseif nameTexts[p] then
-                    nameTexts[p].Visible = false
-                end
-            elseif nameTexts[p] then
-                nameTexts[p].Visible = false
-            end
-        elseif nameTexts[p] then
-            nameTexts[p].Visible = false
-        end
-    end
-end)
-
--- Anti-Fling
-local lastPosition = nil
-RunS.RenderStepped:Connect(function()
-    if antiFling and antiFling.Value then
-        local char = LP.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            local currentPos = char.HumanoidRootPart.Position
-            if lastPosition and (currentPos - lastPosition).Magnitude > 40 then
-                char.HumanoidRootPart.CFrame = CFrame.new(lastPosition)
-                Fluent:Notify({ Title = "Anti-Fling", Content = "Blocked", Duration = 1 })
-            end
-            lastPosition = currentPos
-        end
-    else
-        lastPosition = nil
-    end
-end)
-
--- ========== MISC MOVEMENT (NOCLIP, FLY, SPEED) ==========
+-- ========== MISC: NOCLIP, FLY, SPEED ==========
 RunS.RenderStepped:Connect(function()
     local char = LP.Character
     if not char then return end
     local hum = char:FindFirstChild("Humanoid")
     local root = char:FindFirstChild("HumanoidRootPart")
     if not (hum and root) then return end
-
-    if speedToggle and speedToggle.Value then
-        hum.WalkSpeed = speedSlider and speedSlider.Value or 50
+    if _G.CatalystOptions.speed and _G.CatalystOptions.speed.Value then
+        hum.WalkSpeed = _G.CatalystOptions.speedVal and _G.CatalystOptions.speedVal.Value or 50
     else
         hum.WalkSpeed = 16
     end
-
-    if noclipToggle and noclipToggle.Value then
+    if _G.CatalystOptions.noclip and _G.CatalystOptions.noclip.Value then
         for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
+            if part:IsA("BasePart") then part.CanCollide = false end
         end
     end
-
-    if flyToggle and flyToggle.Value then
+    if _G.CatalystOptions.fly and _G.CatalystOptions.fly.Value then
         if UIS:IsKeyDown(Enum.KeyCode.Space) then
             root.Velocity = Vector3.new(root.Velocity.X, 60, root.Velocity.Z)
         elseif UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
@@ -560,63 +587,21 @@ RunS.RenderStepped:Connect(function()
 end)
 
 UIS.JumpRequest:Connect(function()
-    if flyToggle and flyToggle.Value and LP.Character then
+    if _G.CatalystOptions.fly and _G.CatalystOptions.fly.Value and LP.Character then
         local hum = LP.Character:FindFirstChildOfClass("Humanoid")
         if hum then hum:ChangeState("Jumping") end
     end
 end)
 
--- ========== ОБНОВЛЕНИЕ РОЛЕЙ И ПОДСВЕТКИ ==========
-task.spawn(function()
-    while true do
-        task.wait(2)
-        UpdateRoleCache()
-        for _, p in pairs(Plrs:GetPlayers()) do
-            pcall(UpdateHighlight, p)
-        end
-    end
-end)
-
-Plrs.PlayerAdded:Connect(function(p)
-    p.CharacterAdded:Connect(function()
-        task.wait(0.5)
-        pcall(UpdateHighlight, p)
-    end)
-end)
-
-local function RefreshAllHighlights()
-    for _, p in pairs(Plrs:GetPlayers()) do
-        UpdateHighlight(p)
-    end
-end
-murHighlight:OnChanged(RefreshAllHighlights)
-murColor:OnChanged(RefreshAllHighlights)
-sherHighlight:OnChanged(RefreshAllHighlights)
-sherColor:OnChanged(RefreshAllHighlights)
-innocHighlight:OnChanged(RefreshAllHighlights)
-innocColor:OnChanged(RefreshAllHighlights)
-
 -- ========== AUTO CHEAT SCAN ==========
 task.spawn(function()
     while true do
         task.wait(5)
-        if autoCheat and autoCheat.Value then
+        if _G.CatalystOptions.autoCheat and _G.CatalystOptions.autoCheat.Value then
             pcall(ScanCheaters)
         end
     end
 end)
-
--- ========== SAVE MANAGER ==========
-SaveManager:SetLibrary(Fluent)
-InterfaceManager:SetLibrary(Fluent)
-SaveManager:IgnoreThemeSettings()
-InterfaceManager:SetFolder("Catalyst")
-SaveManager:SetFolder("Catalyst/MM2")
-InterfaceManager:BuildInterfaceSection(Tabs.Settings)
-SaveManager:BuildConfigSection(Tabs.Settings)
-SaveManager:LoadAutoloadConfig()
-
-Window:SelectTab(1)
 
 -- Очистка при смене персонажа
 LP.CharacterAdded:Connect(function()
@@ -626,5 +611,5 @@ LP.CharacterAdded:Connect(function()
     nameTexts = {}
     tpCooldown = false
     lastTP = 0
-    if cooldownPara then cooldownPara:SetContent("Ready") end
+    if _G.CatalystOptions.cooldownPara then _G.CatalystOptions.cooldownPara:SetContent("Ready") end
 end)
