@@ -1,5 +1,5 @@
 -- ========================================================
--- CATALYST MM2 v3.8 (AUTO KILL FARM + FIXED SPAM)
+-- CATALYST MM2 v3.9 (FIXED COIN_SERVER + AUTO KILL)
 -- ========================================================
 local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
@@ -73,7 +73,7 @@ end
 local KillRemote = nil
 local function FindKillRemote()
     if KillRemote then return KillRemote end
-    local possibleNames = {"MainEvent", "KillPlayer", "Hit", "Attack", "Damage", "KillRemote", "ServerEvent"}
+    local possibleNames = {"MainEvent", "KillPlayer", "Hit", "Attack", "Damage", "KillRemote", "ServerEvent", "RemoteEvent"}
     for _, name in pairs(possibleNames) do
         local rem = RS:FindFirstChild(name)
         if rem and (rem:IsA("RemoteEvent") or rem:IsA("UnreliableRemoteEvent")) then
@@ -164,7 +164,7 @@ local lastKillTime = 0
 local function AutoKillFarm()
     if not autoKillEnabled then return end
     local now = tick()
-    if now - lastKillTime < 1.5 then return end -- задержка между убийствами
+    if now - lastKillTime < 1.5 then return end
     local myRole = GetRole(LP)
     if myRole == "Murderer" then
         for _, p in pairs(Plrs:GetPlayers()) do
@@ -185,7 +185,7 @@ local function AutoKillFarm()
     end
 end
 
--- ========== ПОИСК COIN SERVER (ТИХИЙ, С ГРУППИРОВКОЙ ЛОГОВ) ==========
+-- ========== ПОИСК COIN_SERVER (ИСПРАВЛЕНО) ==========
 local CoinServerPart = nil
 local lastCoinLog = 0
 local coinLogCount = 0
@@ -194,18 +194,18 @@ local function GetCoinServer()
     if CoinServerPart and CoinServerPart.Parent then return CoinServerPart end
     local container = workspace:FindFirstChild("CoinContainer")
     if container then
-        CoinServerPart = container:FindFirstChild("CoinServer")
+        CoinServerPart = container:FindFirstChild("Coin_Server") or container:FindFirstChild("CoinServer")
         if CoinServerPart and CoinServerPart:IsA("BasePart") then
             return CoinServerPart
         end
     end
     for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj.Name == "CoinServer" and obj:IsA("BasePart") then
+        if obj.Name and (obj.Name == "Coin_Server" or obj.Name == "CoinServer") and obj:IsA("BasePart") then
             CoinServerPart = obj
             return CoinServerPart
         end
     end
-    -- Логируем в консоль с группировкой (не спамим уведомления)
+    -- Логируем в консоль с группировкой (без спама)
     local now = tick()
     if now - lastCoinLog > 5 then
         coinLogCount = 1
@@ -242,7 +242,7 @@ end
 
 -- ========== GUI ==========
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v3.8" .. (isMobile and " [Mobile]" or ""),
+    Title = "Catalyst v3.9" .. (isMobile and " [Mobile]" or ""),
     SubTitle = "MM2",
     TabWidth = 160,
     Size = UDim2.fromOffset(660, 620),
@@ -261,7 +261,7 @@ local Options = Fluent.Options
 
 -- Home
 local rankText = (_G.CatalystKeyType or "Free") .. " / " .. (_G.CatalystRank or "Standard")
-Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 3.8" })
+Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 3.9" })
 Tabs.Home:AddButton({ Title = "Copy Discord", Callback = function() setclipboard("alchemistslimee") Fluent:Notify({ Title = "Copied" }) end })
 
 -- ========== COMBAT TAB ==========
@@ -325,7 +325,7 @@ local cheatPara = Tabs.Misc:AddParagraph({ Title = "Suspects", Content = "None" 
 local autoCheat = Tabs.Misc:AddToggle("autoCheat", { Title = "Auto Scan", Default = false })
 Tabs.Misc:AddButton({ Title = "Scan Now", Callback = function() detectCheaters() end })
 
--- ========== GUN DROP (БЕЗ ИЗМЕНЕНИЙ) ==========
+-- ========== GUN DROP КОД (БЕЗ ИЗМЕНЕНИЙ) ==========
 local gunDropPart = nil
 local gunDropHighlight = nil
 local gunDropText = nil
@@ -442,7 +442,7 @@ task.spawn(function()
     end
 end)
 
--- ========== Aimbot (только не мобильные) ==========
+-- ========== AIMBOT ==========
 if not isMobile then
     local function GetTarget()
         local myRole = GetRole(LP)
@@ -708,7 +708,7 @@ end)
 
 task.spawn(function()
     while true do
-        task.wait(1.5) -- частота убийств
+        task.wait(1.5)
         pcall(AutoKillFarm)
     end
 end)
