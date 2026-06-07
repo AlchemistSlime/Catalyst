@@ -1,22 +1,19 @@
 -- ========================================================
--- CATALYST MM2 v3.5 (FULLY WORKING + MOBILE SUPPORT)
+-- CATALYST MM2 v3.6 (NO FLING, NO SPAM)
 -- ========================================================
 local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
 
--- Определяем устройство
 local isMobile = UIS.TouchEnabled or not UIS.MouseEnabled
 
--- Загрузка Fluent
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
--- ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
 _G.CatalystKeyType = _G.CatalystKeyType or "Free"
 _G.CatalystRank = _G.CatalystRank or "Standard"
 
--- ========== ОПРЕДЕЛЕНИЕ РОЛЕЙ (МГНОВЕННО) ==========
+-- ========== ОПРЕДЕЛЕНИЕ РОЛЕЙ ==========
 local roleCache = {}
 local lastRoleUpdate = 0
 
@@ -28,14 +25,11 @@ local function GetRole(p)
     end
     local char = p.Character
     local role = "Innocent"
-    -- Проверка убийцы (ножик в руке или в рюкзаке)
     if char:FindFirstChild("Knife") or (p.Backpack and p.Backpack:FindFirstChild("Knife")) or char:FindFirstChild("MurdererEffect") then
         role = "Murderer"
-    -- Проверка шерифа (пистолет в руке или в рюкзаке)
     elseif char:FindFirstChild("Gun") or char:FindFirstChild("Revolver") or (p.Backpack and (p.Backpack:FindFirstChild("Gun") or p.Backpack:FindFirstChild("Revolver"))) then
         role = "Sheriff"
     else
-        -- Резерв: данные из RoundView (для начала раунда)
         local rd = RS:FindFirstChild("RoundView") or RS:FindFirstChild("GameStorage")
         local ur = rd and rd:FindFirstChild("RoleData") and rd.RoleData:FindFirstChild(p.Name)
         if ur then
@@ -54,32 +48,26 @@ local function UpdateRoleCache()
     end
 end
 
--- ========== ПОИСК GUN DROP (НЕ ЗАВИСИТ ОТ ИМЕНИ) ==========
-local function FindGunDrop()
-    -- Ищем объект класса Tool в workspace с именем "Gun" или "Revolver"
-    for _, obj in ipairs(workspace:GetChildren()) do
-        if obj:IsA("Tool") and (obj.Name == "Gun" or obj.Name == "Revolver") then
-            -- Возвращаем PrimaryPart или HumanoidRootPart (если есть)
-            if obj:FindFirstChild("Handle") then
-                return obj.Handle
-            elseif obj:FindFirstChild("PrimaryPart") then
-                return obj.PrimaryPart
-            else
-                return obj:FindFirstChildWhichIsA("BasePart")
-            end
-        end
-    end
-    return nil
-end
-
 local function HasGun()
     local char = LP.Character
     return char and (char:FindFirstChild("Gun") or char:FindFirstChild("Revolver")) ~= nil
 end
 
--- ========== GUI (FLUENT) ==========
+-- ========== ПОИСК GUN DROP ==========
+local function FindGunDrop()
+    for _, obj in ipairs(workspace:GetChildren()) do
+        if obj:IsA("Tool") and (obj.Name == "Gun" or obj.Name == "Revolver") then
+            if obj:FindFirstChild("Handle") then return obj.Handle
+            elseif obj:FindFirstChild("PrimaryPart") then return obj.PrimaryPart
+            else return obj:FindFirstChildWhichIsA("BasePart") end
+        end
+    end
+    return nil
+end
+
+-- ========== GUI ==========
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v3.5" .. (isMobile and " [Mobile]" or ""),
+    Title = "Catalyst v3.6" .. (isMobile and " [Mobile]" or ""),
     SubTitle = "MM2",
     TabWidth = 160,
     Size = UDim2.fromOffset(620, 520),
@@ -115,24 +103,6 @@ local tpBtn = Tabs.Combat:AddButton({ Title = "TP to Gun (once)", Callback = fun
 local autoTP = Tabs.Combat:AddToggle("autoTP", { Title = "Auto TP every 1s", Default = false })
 local safeTP = Tabs.Combat:AddToggle("safeTP", { Title = "Avoid Murderer", Default = true })
 local cooldownPara = Tabs.Combat:AddParagraph({ Title = "Cooldown", Content = "Ready" })
-
-Tabs.Combat:AddSection("Fling (Speed 9999)")
-local flingAll = Tabs.Combat:AddButton({ Title = "Fling All", Callback = function() FlingPlayers("All") end })
-local flingMurder = Tabs.Combat:AddButton({ Title = "Fling Murderers", Callback = function() FlingPlayers("Murderer") end })
-local flingSheriff = Tabs.Combat:AddButton({ Title = "Fling Sheriffs", Callback = function() FlingPlayers("Sheriff") end })
-
-Tabs.Combat:AddSection("Blacklist")
-local blacklistDropdown = Tabs.Combat:AddDropdown("blacklist", { Title = "Ignore players", Values = {}, Multi = true, Default = {} })
-local function RefreshBlacklist()
-    local names = {}
-    for _, p in pairs(Plrs:GetPlayers()) do
-        if p ~= LP then table.insert(names, p.Name) end
-    end
-    blacklistDropdown:SetValues(names)
-end
-RefreshBlacklist()
-Plrs.PlayerAdded:Connect(RefreshBlacklist)
-Plrs.PlayerRemoving:Connect(RefreshBlacklist)
 
 -- ========== VISUALS TAB ==========
 -- Murderer
@@ -172,43 +142,7 @@ local cheatPara = Tabs.Misc:AddParagraph({ Title = "Suspects", Content = "None" 
 local autoCheat = Tabs.Misc:AddToggle("autoCheat", { Title = "Auto Scan", Default = false })
 Tabs.Misc:AddButton({ Title = "Scan Now", Callback = function() detectCheaters() end })
 
--- ========== ФУНКЦИЯ FLING (РАЗГОН 9999) ==========
-function FlingPlayers(targetType)
-    local blacklist = Options.blacklist or {}
-    local blackVal = blacklist.Value or {}
-    local targets = {}
-    for _, p in pairs(Plrs:GetPlayers()) do
-        if p ~= LP and not table.find(blackVal, p.Name) then
-            local role = GetRole(p)
-            if targetType == "All" then
-                table.insert(targets, p)
-            elseif targetType == "Murderer" and role == "Murderer" then
-                table.insert(targets, p)
-            elseif targetType == "Sheriff" and role == "Sheriff" then
-                table.insert(targets, p)
-            end
-        end
-    end
-    if #targets == 0 then
-        Fluent:Notify({ Title = "Fling", Content = "No targets", Duration = 2 })
-        return
-    end
-    for _, p in ipairs(targets) do
-        local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            -- Случайное направление с сильным вертикальным компонентом
-            local dir = Vector3.new(math.random(-100, 100), math.random(80, 150), math.random(-100, 100)).Unit
-            hrp.Velocity = dir * 9999
-            -- Отключаем коллизию на 0.1 сек, чтобы пролетел сквозь стены
-            hrp.CanCollide = false
-            task.wait(0.1)
-            hrp.CanCollide = true
-        end
-    end
-    Fluent:Notify({ Title = "Fling", Content = #targets .. " player(s) flung", Duration = 2 })
-end
-
--- ========== GUN DROP (ТЕЛЕПОРТ И ПОДСВЕТКА) ==========
+-- ========== GUN DROP (ПОДСВЕТКА И ТЕЛЕПОРТ) ==========
 local gunDropPart = nil
 local gunDropHighlight = nil
 local gunDropText = nil
@@ -272,7 +206,6 @@ task.spawn(function()
     end
 end)
 
--- Плавное движение текста
 RunS.RenderStepped:Connect(function()
     if gunDropText and gunDropText.Visible and gunDropPart then
         local pos, on = Cam:WorldToViewportPoint(gunDropPart.Position + Vector3.new(0,1.5,0))
@@ -288,7 +221,7 @@ function TeleportToGunDrop(returnBack)
     if HasGun() then return false end
     local gd = FindGunDrop()
     if not gd then
-        Fluent:Notify({ Title = "Gun Drop", Content = "No gun found", Duration = 1 })
+        -- БЕЗ УВЕДОМЛЕНИЯ
         return false
     end
     if safeTP and safeTP.Value then
@@ -329,7 +262,7 @@ task.spawn(function()
     end
 end)
 
--- ========== AIMBOT (ТОЛЬКО НЕ НА ТЕЛЕФОНЕ) ==========
+-- ========== AIMBOT ==========
 if not isMobile then
     local function GetTarget()
         local myRole = GetRole(LP)
@@ -390,11 +323,10 @@ if not isMobile then
         end
     end)
 else
-    -- На телефоне отключаем весь аимбот
     aimToggle.Enabled = false
 end
 
--- ========== ESP (HIGHLIGHT + NAME) ==========
+-- ========== ESP ==========
 local nameTexts = {}
 local function ClearNameESP()
     for _, txt in pairs(nameTexts) do
@@ -479,7 +411,6 @@ RunS.RenderStepped:Connect(function()
     end
 end)
 
--- Обновление ролей каждые 2 секунды
 task.spawn(function()
     while true do
         task.wait(2)
@@ -550,7 +481,7 @@ task.spawn(function()
     end
 end)
 
--- ========== MISC MOVEMENT ==========
+-- ========== MOVEMENT ==========
 RunS.RenderStepped:Connect(function()
     local char = LP.Character
     if not char then return end
@@ -568,7 +499,7 @@ RunS.RenderStepped:Connect(function()
         end
     end
     if fly and fly.Value then
-        if UIS:IsKeyDown(Enum.KeyCode.Space) or (isMobile and UIS:GetTouchEnabled()) then
+        if UIS:IsKeyDown(Enum.KeyCode.Space) or (isMobile and #UIS:GetTouches() > 0) then
             root.Velocity = Vector3.new(root.Velocity.X, 60, root.Velocity.Z)
         elseif UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
             root.Velocity = Vector3.new(root.Velocity.X, -60, root.Velocity.Z)
@@ -585,7 +516,7 @@ UIS.JumpRequest:Connect(function()
     end
 end)
 
--- ========== SAVE MANAGER ==========
+-- ========== SAVE & LAUNCH ==========
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
