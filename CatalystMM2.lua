@@ -3,7 +3,6 @@
 -- ========================================================
 local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
-local CatalystThreads = {}
 
 -- 🔥 АВТО-ЗАГРУЗКА БИБЛИОТЕК
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -16,36 +15,58 @@ local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.
 _G.CatalystKeyType = _G.CatalystKeyType or "Free"
 _G.CatalystRank = _G.CatalystRank or "Standard"
 
+-- Отключение вкладки Dev (для релиза можно поставить true)
+local DISABLE_DEV_TAB = false
+
 -- ========================================================
 -- 📝 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 -- ========================================================
+local roleCache = {}
+local lastRoleUpdate = 0
+
 local function GetRole(p)
     if not p or not p.Character then return "Innocent" end
-    if p.Character:FindFirstChild("Knife") or (p.Backpack and p.Backpack:FindFirstChild("Knife")) or p.Character:FindFirstChild("MurdererEffect") then return "Murderer" end
-    if p.Character:FindFirstChild("Gun") or (p.Backpack and p.Backpack:FindFirstChild("Gun")) then return "Sheriff" end
-    local rd = RS:FindFirstChild("RoundView") or RS:FindFirstChild("GameStorage")
-    local ur = rd and rd:FindFirstChild("RoleData") and rd.RoleData:FindFirstChild(p.Name)
-    if ur then
-        if ur.Value == "Murderer" then return "Murderer"
-        elseif ur.Value == "Sheriff" or ur.Value == "Hero" then return "Sheriff" end
+    local now = tick()
+    if roleCache[p] and (now - lastRoleUpdate) < 2 then
+        return roleCache[p]
     end
-    return "Innocent"
+    local role = "Innocent"
+    if p.Character:FindFirstChild("Knife") or (p.Backpack and p.Backpack:FindFirstChild("Knife")) or p.Character:FindFirstChild("MurdererEffect") then
+        role = "Murderer"
+    elseif p.Character:FindFirstChild("Gun") or (p.Backpack and p.Backpack:FindFirstChild("Gun")) then
+        role = "Sheriff"
+    else
+        local rd = RS:FindFirstChild("RoundView") or RS:FindFirstChild("GameStorage")
+        local ur = rd and rd:FindFirstChild("RoleData") and rd.RoleData:FindFirstChild(p.Name)
+        if ur then
+            if ur.Value == "Murderer" then role = "Murderer"
+            elseif ur.Value == "Sheriff" or ur.Value == "Hero" then role = "Sheriff" end
+        end
+    end
+    roleCache[p] = role
+    return role
+end
+
+local function UpdateRoleCache()
+    lastRoleUpdate = tick()
+    for _, p in pairs(Plrs:GetPlayers()) do
+        GetRole(p)
+    end
 end
 
 local function HasRevolver()
     local char = LP.Character
-    if not char then return false end
-    return char:FindFirstChild("Revolver") ~= nil
+    return char and char:FindFirstChild("Revolver") ~= nil
 end
 
 -- ========================================================
 -- 🖥️ СОЗДАНИЕ ОКНА И ВКЛАДОК
 -- ========================================================
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v2.5.0",
+    Title = "Catalyst v2.6.0",
     SubTitle = "MM2",
     TabWidth = 160,
-    Size = UDim2.fromOffset(650, 540),
+    Size = UDim2.fromOffset(660, 550),
     Acrylic = false,
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.LeftControl
@@ -59,10 +80,14 @@ local Tabs = {
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
+if not DISABLE_DEV_TAB then
+    Tabs.Dev = Window:AddTab({ Title = "Dev", Icon = "bug" })
+end
+
 local Options = Fluent.Options
 
 -- ========================================================
--- 🏠 HOME TAB (ПЕРВАЯ)
+-- 🏠 HOME TAB
 -- ========================================================
 local rankText = (_G.CatalystKeyType or "Unknown") .. " / " .. (_G.CatalystRank or "Standard")
 Tabs.Home:AddParagraph({
@@ -76,10 +101,10 @@ Tabs.Home:AddButton({
         Fluent:Notify({ Title = "Copied!", Content = "Discord tag: alchemistslimee", Duration = 2 })
     end
 })
-Tabs.Home:AddSection("Version 2.5.0")
+Tabs.Home:AddSection("Version 2.6.0")
 Tabs.Home:AddParagraph({
     Title = "Changelog",
-    Content = "• Added separate text ESP for each role\n• Added Gun Drop text ESP\n• Added Prediction Delay slider\n• Added Safe TP (avoid Murderer)\n• Added TP cooldown (3 sec)\n• Auto-disable TP when Revolver equipped"
+    Content = "• Optimized performance\n• Grouped ESP settings by role\n• Added Dev tab (remote logger, cursor info, cheat detection)\n• Improved Gun Drop detection"
 })
 
 -- ========================================================
@@ -103,29 +128,35 @@ local SafeTPToggle = Tabs.Combat:AddToggle("SafeTP", { Title = "Safe TP (avoid M
 local CooldownInfo = Tabs.Combat:AddParagraph({ Title = "Cooldown", Content = "Ready" })
 
 -- ========================================================
--- 👁️ VISUALS TAB
+-- 👁️ VISUALS TAB (GROUPED BY ROLE)
 -- ========================================================
-Tabs.Visuals:AddSection("Player Highlight ESP")
+-- Murderer
+Tabs.Visuals:AddSection("Murderer")
 local MurdererESP = Tabs.Visuals:AddToggle("KillerESP", { Title = "Highlight Murderer", Default = false })
-local MurdererColor = Tabs.Visuals:AddColorpicker("KillerESPColor", { Title = "Murderer Color", Default = Color3.fromRGB(255, 0, 0) })
+local MurdererColor = Tabs.Visuals:AddColorpicker("KillerESPColor", { Title = "Highlight Color", Default = Color3.fromRGB(255, 0, 0) })
+local MurdererTextESP = Tabs.Visuals:AddToggle("MurdererTextESP", { Title = "Show Name ESP", Default = true })
+local MurdererTextColor = Tabs.Visuals:AddColorpicker("MurdererTextColor", { Title = "Name Color", Default = Color3.fromRGB(255, 0, 0) })
+
+-- Sheriff
+Tabs.Visuals:AddSection("Sheriff")
 local SheriffESP = Tabs.Visuals:AddToggle("SherifESP", { Title = "Highlight Sheriff", Default = false })
-local SheriffColor = Tabs.Visuals:AddColorpicker("SherifESPColor", { Title = "Sheriff Color", Default = Color3.fromRGB(0, 0, 255) })
+local SheriffColor = Tabs.Visuals:AddColorpicker("SherifESPColor", { Title = "Highlight Color", Default = Color3.fromRGB(0, 0, 255) })
+local SheriffTextESP = Tabs.Visuals:AddToggle("SheriffTextESP", { Title = "Show Name ESP", Default = true })
+local SheriffTextColor = Tabs.Visuals:AddColorpicker("SheriffTextColor", { Title = "Name Color", Default = Color3.fromRGB(0, 0, 255) })
+
+-- Innocent
+Tabs.Visuals:AddSection("Innocent")
 local InnocentESP = Tabs.Visuals:AddToggle("InnocentESP", { Title = "Highlight Innocent", Default = false })
-local InnocentColor = Tabs.Visuals:AddColorpicker("InnocentESPColor", { Title = "Innocent Color", Default = Color3.fromRGB(0, 255, 0) })
+local InnocentColor = Tabs.Visuals:AddColorpicker("InnocentESPColor", { Title = "Highlight Color", Default = Color3.fromRGB(0, 255, 0) })
+local InnocentTextESP = Tabs.Visuals:AddToggle("InnocentTextESP", { Title = "Show Name ESP", Default = false })
+local InnocentTextColor = Tabs.Visuals:AddColorpicker("InnocentTextColor", { Title = "Name Color", Default = Color3.fromRGB(0, 255, 0) })
 
-Tabs.Visuals:AddSection("Player Name ESP (Text)")
-local MurdererTextESP = Tabs.Visuals:AddToggle("MurdererTextESP", { Title = "Show Murderer Names", Default = true })
-local MurdererTextColor = Tabs.Visuals:AddColorpicker("MurdererTextColor", { Title = "Murderer Name Color", Default = Color3.fromRGB(255, 0, 0) })
-local SheriffTextESP = Tabs.Visuals:AddToggle("SheriffTextESP", { Title = "Show Sheriff Names", Default = true })
-local SheriffTextColor = Tabs.Visuals:AddColorpicker("SheriffTextColor", { Title = "Sheriff Name Color", Default = Color3.fromRGB(0, 0, 255) })
-local InnocentTextESP = Tabs.Visuals:AddToggle("InnocentTextESP", { Title = "Show Innocent Names", Default = false })
-local InnocentTextColor = Tabs.Visuals:AddColorpicker("InnocentTextColor", { Title = "Innocent Name Color", Default = Color3.fromRGB(0, 255, 0) })
-
-Tabs.Visuals:AddSection("Gun Drop ESP")
+-- Gun Drop
+Tabs.Visuals:AddSection("Gun Drop")
 local HighlightGunDrop = Tabs.Visuals:AddToggle("HighlightGunDrop", { Title = "Highlight Gun Drop", Default = false })
-local GunDropColor = Tabs.Visuals:AddColorpicker("GunDropColor", { Title = "Gun Drop Highlight Color", Default = Color3.fromRGB(128, 0, 255) })
-local GunDropTextToggle = Tabs.Visuals:AddToggle("GunDropTextESP", { Title = "Show Gun Drop Text", Default = true })
-local GunDropTextColor = Tabs.Visuals:AddColorpicker("GunDropTextColor", { Title = "Gun Drop Text Color", Default = Color3.fromRGB(255, 255, 255) })
+local GunDropColor = Tabs.Visuals:AddColorpicker("GunDropColor", { Title = "Highlight Color", Default = Color3.fromRGB(128, 0, 255) })
+local GunDropTextToggle = Tabs.Visuals:AddToggle("GunDropTextESP", { Title = "Show Text", Default = true })
+local GunDropTextColor = Tabs.Visuals:AddColorpicker("GunDropTextColor", { Title = "Text Color", Default = Color3.fromRGB(255, 255, 255) })
 
 -- ========================================================
 -- 🛠️ MISC TAB
@@ -137,20 +168,27 @@ local SpeedToggle = Tabs.Misc:AddToggle("Speedhack", { Title = "Enable Speedhack
 local SpeedSlider = Tabs.Misc:AddSlider("SpeedSlider", { Title = "Speedhack Limit (KM/h)", Default = 50, Min = 16, Max = 250, Rounding = 0 })
 
 -- ========================================================
--- 🔫 GUN DROP ПОИСК И ПОДСВЕТКА
+-- 🔫 GUN DROP ПОИСК И ВИЗУАЛЫ (ОПТИМИЗИРОВАНО)
 -- ========================================================
 local GunDropPart = nil
 local GunDropHighlight = nil
 local GunDropTextObj = nil
 local LastTPTime = 0
 local TPBlocked = false
+local lastGunDropSearch = 0
+local cachedGunDrop = nil
 
 local function FindGunDrop()
+    local now = tick()
+    if now - lastGunDropSearch < 0.5 then return cachedGunDrop end
+    lastGunDropSearch = now
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj.Name and obj.Name:lower():find("gundrop") and obj:IsA("BasePart") then
+            cachedGunDrop = obj
             return obj
         end
     end
+    cachedGunDrop = nil
     return nil
 end
 
@@ -193,8 +231,8 @@ local function UpdateGunDropVisuals()
             else
                 GunDropTextObj.Visible = false
             end
-        else
-            if GunDropTextObj then GunDropTextObj.Visible = false end
+        elseif GunDropTextObj then
+            GunDropTextObj.Visible = false
         end
     else
         if GunDropHighlight then GunDropHighlight:Destroy(); GunDropHighlight = nil end
@@ -202,16 +240,13 @@ local function UpdateGunDropVisuals()
     end
 end
 
--- Периодическое обновление (каждые 0.2 сек для текста)
-table.insert(CatalystThreads, RunS.RenderStepped:Connect(function()
-    pcall(UpdateGunDropVisuals)
-end))
-
--- Обновление подсветки при изменении настроек
-HighlightGunDrop:OnChanged(UpdateGunDropVisuals)
-GunDropColor:OnChanged(UpdateGunDropVisuals)
-GunDropTextToggle:OnChanged(UpdateGunDropVisuals)
-GunDropTextColor:OnChanged(UpdateGunDropVisuals)
+-- Обновление визуалов каждые 0.2 секунды (не в RenderStepped)
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        pcall(UpdateGunDropVisuals)
+    end
+end)
 
 -- ========================================================
 -- 🚀 ТЕЛЕПОРТ К GUN DROP (С ЗАЩИТАМИ)
@@ -249,7 +284,6 @@ function TeleportToGunDrop(returnBack)
     if returnBack and hrp and hrp.Parent then
         hrp.CFrame = originalPos
     end
-    -- Успешный телепорт
     LastTPTime = now
     TPBlocked = true
     CooldownInfo:SetContent("Cooldown: 3s")
@@ -259,18 +293,18 @@ function TeleportToGunDrop(returnBack)
     return true
 end
 
--- Авто-телепорт каждую секунду (с учётом блокировки и наличия револьвера)
-table.insert(CatalystThreads, task.spawn(function()
+-- Авто-телепорт (раз в секунду)
+task.spawn(function()
     while true do
         task.wait(1)
         if AutoTPGunDrop and AutoTPGunDrop.Value and not TPBlocked and not HasRevolver() then
             pcall(TeleportToGunDrop, true)
         end
     end
-end))
+end)
 
 -- ========================================================
--- 🎯 AIMBOT (С ПРЕДИКТОМ И ЗАДЕРЖКОЙ)
+-- 🎯 AIMBOT (С ОПТИМИЗАЦИЕЙ)
 -- ========================================================
 local function GetTarget()
     local best, minAngle, maxAngle = nil, math.huge, (Options.Slider and Options.Slider.Value or 80)
@@ -286,9 +320,7 @@ local function GetTarget()
                 local maxDist = (maxAngle / 360) * Cam.ViewportSize.X
                 if dist <= maxDist then
                     local angle = math.deg(math.acos(math.clamp(Cam.CFrame.LookVector:Dot((p.Character.HumanoidRootPart.Position - Cam.CFrame.Position).Unit), -1, 1)))
-                    if myRole == "Murderer" and tRole == "Sheriff" and angle < minAngle then
-                        minAngle, best = angle, p.Character.HumanoidRootPart
-                    elseif myRole == "Murderer" and tRole == "Innocent" and angle < minAngle then
+                    if myRole == "Murderer" and (tRole == "Sheriff" or tRole == "Innocent") and angle < minAngle then
                         minAngle, best = angle, p.Character.HumanoidRootPart
                     elseif myRole == "Sheriff" and tRole == "Murderer" and angle < minAngle then
                         minAngle, best = angle, p.Character.HumanoidRootPart
@@ -300,11 +332,11 @@ local function GetTarget()
     return best
 end
 
--- FOV Circle
+-- FOV Circle (только если Drawing доступен)
 if (typeof(Drawing) == "table" and Drawing.new ~= nil) then
     local FOV = Drawing.new("Circle")
     FOV.Thickness, FOV.NumSides, FOV.Filled, FOV.Transparency = 1.5, 60, false, 1
-    table.insert(CatalystThreads, RunS.RenderStepped:Connect(function()
+    RunS.RenderStepped:Connect(function()
         if Options.Slider and Options.Colorpicker2 and Options.MyToggle then
             FOV.Visible = Options.MyToggle.Value
             FOV.Radius = (Options.Slider.Value / 360) * Cam.ViewportSize.X
@@ -313,11 +345,11 @@ if (typeof(Drawing) == "table" and Drawing.new ~= nil) then
         else
             FOV.Visible = false
         end
-    end))
+    end)
 end
 
--- Aimbot с задержкой предсказания
-table.insert(CatalystThreads, RunS.RenderStepped:Connect(function()
+-- Aimbot подключён к RenderStepped (для плавности)
+RunS.RenderStepped:Connect(function()
     if not (Options.MyToggle and Options.MyToggle.Value) then return end
     local press = UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or (Options.Keybind and Options.Keybind:GetState())
     local target = GetTarget()
@@ -329,12 +361,21 @@ table.insert(CatalystThreads, RunS.RenderStepped:Connect(function()
         end
         Cam.CFrame = CFrame.lookAt(Cam.CFrame.Position, pos)
     end
-end))
+end)
 
 -- ========================================================
--- 👥 ESP (HIGHLIGHT + ИМЕНА)
+-- 👥 ESP (HIGHLIGHT + ИМЕНА) ОПТИМИЗИРОВАННЫЕ
 -- ========================================================
--- Подсветка модельки
+local NameTextObjects = {}
+
+local function ClearNameESP()
+    for _, text in pairs(NameTextObjects) do
+        if text and text.Remove then text:Remove() end
+    end
+    NameTextObjects = {}
+end
+
+-- Обновление подсветки (вызывается по событиям)
 local function UpdateHighlight(p)
     if not p or p == LP or not p.Character or not p.Character:FindFirstChild("HumanoidRootPart") then return end
     local role = GetRole(p)
@@ -361,87 +402,80 @@ local function UpdateHighlight(p)
         highlight.OutlineColor = color
         highlight.FillTransparency = 0.4
         highlight.OutlineTransparency = 0
-    else
-        if highlight then highlight:Destroy() end
+    elseif highlight then
+        highlight:Destroy()
     end
 end
 
--- Текстовый ESP (имена)
-local NameTextObjects = {}
-local function ClearNameESP()
-    for _, text in pairs(NameTextObjects) do
-        if text and text.Remove then text:Remove() end
-    end
-    NameTextObjects = {}
-end
-
-local function UpdateNameESP()
-    for _, p in pairs(Plrs:GetPlayers()) do
-        if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
-            local role = GetRole(p)
-            local show = false
-            local color = Color3.new(1,1,1)
-            if role == "Murderer" and Options.MurdererTextESP and Options.MurdererTextESP.Value then
-                show = true
-                color = Options.MurdererTextColor and Options.MurdererTextColor.Value or Color3.fromRGB(255,0,0)
-            elseif role == "Sheriff" and Options.SheriffTextESP and Options.SheriffTextESP.Value then
-                show = true
-                color = Options.SheriffTextColor and Options.SheriffTextColor.Value or Color3.fromRGB(0,0,255)
-            elseif role == "Innocent" and Options.InnocentTextESP and Options.InnocentTextESP.Value then
-                show = true
-                color = Options.InnocentTextColor and Options.InnocentTextColor.Value or Color3.fromRGB(0,255,0)
-            end
-            if show then
-                local root = p.Character.HumanoidRootPart
-                local vec, onScreen = Cam:WorldToViewportPoint(root.Position + Vector3.new(0, 2.5, 0))
-                if onScreen then
-                    local text = NameTextObjects[p]
-                    if not text then
-                        text = Drawing.new("Text")
-                        text.Center = true
-                        text.Outline = true
-                        text.Size = 14
-                        NameTextObjects[p] = text
-                    end
-                    text.Text = p.Name .. " (" .. role .. ")"
-                    text.Position = Vector2.new(vec.X, vec.Y)
-                    text.Color = color
-                    text.Visible = true
-                else
-                    if NameTextObjects[p] then NameTextObjects[p].Visible = false end
+-- Обновление текстового ESP (раз в 0.15 секунды)
+local lastTextUpdate = 0
+RunS.Heartbeat:Connect(function()
+    local now = tick()
+    if now - lastTextUpdate < 0.15 then return end
+    lastTextUpdate = now
+    pcall(function()
+        for _, p in pairs(Plrs:GetPlayers()) do
+            if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
+                local role = GetRole(p)
+                local show = false
+                local color = Color3.new(1,1,1)
+                if role == "Murderer" and Options.MurdererTextESP and Options.MurdererTextESP.Value then
+                    show = true
+                    color = Options.MurdererTextColor and Options.MurdererTextColor.Value or Color3.fromRGB(255,0,0)
+                elseif role == "Sheriff" and Options.SheriffTextESP and Options.SheriffTextESP.Value then
+                    show = true
+                    color = Options.SheriffTextColor and Options.SheriffTextColor.Value or Color3.fromRGB(0,0,255)
+                elseif role == "Innocent" and Options.InnocentTextESP and Options.InnocentTextESP.Value then
+                    show = true
+                    color = Options.InnocentTextColor and Options.InnocentTextColor.Value or Color3.fromRGB(0,255,0)
                 end
-            else
-                if NameTextObjects[p] then NameTextObjects[p].Visible = false end
+                if show then
+                    local root = p.Character.HumanoidRootPart
+                    local vec, onScreen = Cam:WorldToViewportPoint(root.Position + Vector3.new(0, 2.5, 0))
+                    if onScreen then
+                        local text = NameTextObjects[p]
+                        if not text then
+                            text = Drawing.new("Text")
+                            text.Center = true
+                            text.Outline = true
+                            text.Size = 14
+                            NameTextObjects[p] = text
+                        end
+                        text.Text = p.Name .. " (" .. role .. ")"
+                        text.Position = Vector2.new(vec.X, vec.Y)
+                        text.Color = color
+                        text.Visible = true
+                    elseif NameTextObjects[p] then
+                        NameTextObjects[p].Visible = false
+                    end
+                elseif NameTextObjects[p] then
+                    NameTextObjects[p].Visible = false
+                end
+            elseif NameTextObjects[p] then
+                NameTextObjects[p].Visible = false
             end
-        else
-            if NameTextObjects[p] then NameTextObjects[p].Visible = false end
+        end
+    end)
+end)
+
+-- Обновление ролей и подсветки (раз в 2 секунды)
+task.spawn(function()
+    while true do
+        task.wait(2)
+        UpdateRoleCache()
+        for _, p in pairs(Plrs:GetPlayers()) do
+            pcall(UpdateHighlight, p)
         end
     end
-end
+end)
 
--- Обновление имён каждый рендер
-table.insert(CatalystThreads, RunS.RenderStepped:Connect(function()
-    pcall(UpdateNameESP)
-end))
-
--- Обновление подсветки по таймеру (0.3 сек)
-table.insert(CatalystThreads, task.spawn(function()
-    while task.wait(0.3) do
-        pcall(function()
-            for _, p in pairs(Plrs:GetPlayers()) do
-                UpdateHighlight(p)
-            end
-        end)
-    end
-end))
-
--- Подписка на новых игроков
-table.insert(CatalystThreads, Plrs.PlayerAdded:Connect(function(p)
+-- События добавления игроков
+Plrs.PlayerAdded:Connect(function(p)
     p.CharacterAdded:Connect(function()
         task.wait(0.5)
         pcall(UpdateHighlight, p)
     end)
-end))
+end)
 
 -- Реакция на изменение настроек подсветки
 local function RefreshHighlights()
@@ -454,21 +488,116 @@ SheriffColor:OnChanged(RefreshHighlights)
 InnocentESP:OnChanged(RefreshHighlights)
 InnocentColor:OnChanged(RefreshHighlights)
 
--- При изменении настроек текста – очищаем объекты, чтобы пересоздать с новым цветом
-local function RefreshNameESP()
+-- Очистка текста при смене настроек
+local function ClearTextCache()
     ClearNameESP()
 end
-MurdererTextESP:OnChanged(RefreshNameESP)
-MurdererTextColor:OnChanged(RefreshNameESP)
-SheriffTextESP:OnChanged(RefreshNameESP)
-SheriffTextColor:OnChanged(RefreshNameESP)
-InnocentTextESP:OnChanged(RefreshNameESP)
-InnocentTextColor:OnChanged(RefreshNameESP)
+MurdererTextESP:OnChanged(ClearTextCache)
+MurdererTextColor:OnChanged(ClearTextCache)
+SheriffTextESP:OnChanged(ClearTextCache)
+SheriffTextColor:OnChanged(ClearTextCache)
+InnocentTextESP:OnChanged(ClearTextCache)
+InnocentTextColor:OnChanged(ClearTextCache)
 
 -- ========================================================
--- 🏃‍♂️ MISC (NOCLIP, FLY, SPEED)
+-- 🧪 DEV TAB (ИНФОРМАЦИЯ ПОД КУРСОРОМ, РЕМОТЫ, АВТОДЕТЕКТ)
 -- ========================================================
-table.insert(CatalystThreads, RunS.RenderStepped:Connect(function()
+if not DISABLE_DEV_TAB then
+    Tabs.Dev:AddSection("Cursor Info")
+    local cursorInfoPara = Tabs.Dev:AddParagraph({ Title = "Target", Content = "Move mouse over any object" })
+    local cursorToggle = Tabs.Dev:AddToggle("CursorInfo", { Title = "Enable Cursor Info", Default = true })
+    
+    -- Обновление информации под курсором (раз в 0.1 сек)
+    task.spawn(function()
+        while true do
+            task.wait(0.1)
+            if not cursorToggle or not cursorToggle.Value then continue end
+            local mouse = UIS:GetMouseLocation()
+            local target = Cam:ScreenPointToRay(mouse.X, mouse.Y).Origin
+            local part, hitPos = workspace:FindPartOnRay(Ray.new(target, Cam.CFrame.LookVector * 1000), LP.Character)
+            if part then
+                local info = string.format("Object: %s\nClass: %s\nName: %s\nChildren: %d\nParent: %s\nColor: %s\nMaterial: %s",
+                    part:GetFullName(), part.ClassName, part.Name, #part:GetChildren(), part.Parent and part.Parent.Name or "nil",
+                    tostring(part.Color), tostring(part.Material))
+                cursorInfoPara:SetContent(info)
+            else
+                cursorInfoPara:SetContent("No object in sight")
+            end
+        end
+    end)
+    
+    Tabs.Dev:AddSection("Remote Logger")
+    local remoteLogPara = Tabs.Dev:AddParagraph({ Title = "Last 3 Remotes", Content = "None" })
+    local remoteLogs = {}
+    local function logRemote(name, args)
+        table.insert(remoteLogs, 1, { time = os.date("%H:%M:%S"), name = name, args = tostring(args) })
+        if #remoteLogs > 3 then table.remove(remoteLogs) end
+        local text = ""
+        for _, log in ipairs(remoteLogs) do
+            text = text .. string.format("[%s] %s → %s\n", log.time, log.name, log.args)
+        end
+        remoteLogPara:SetContent(text)
+    end
+    -- Перехват RemoteEvent
+    local oldMeta = getrawmetatable(game)
+    setreadonly(oldMeta, false)
+    local oldNamecall = oldMeta.__namecall
+    oldMeta.__namecall = newcclosure(function(self, ...)
+        local args = {...}
+        if string.find(getnamecallmethod(), "FireServer") and (self:IsA("RemoteEvent") or self:IsA("RemoteFunction")) then
+            logRemote(self.Name, args)
+        end
+        return oldNamecall(self, ...)
+    end)
+    setreadonly(oldMeta, true)
+    
+    Tabs.Dev:AddSection("Cheater Detection")
+    local detectedCheatersPara = Tabs.Dev:AddParagraph({ Title = "Suspected Cheaters", Content = "None" })
+    local autoDetectToggle = Tabs.Dev:AddToggle("AutoDetect", { Title = "Auto Scan (every 5s)", Default = false })
+    local scanButton = Tabs.Dev:AddButton({
+        Title = "Scan Now",
+        Callback = function() detectCheaters() end
+    })
+    
+    local function detectCheaters()
+        local suspects = {}
+        for _, p in pairs(Plrs:GetPlayers()) do
+            if p ~= LP and p.Character and p.Character:FindFirstChild("Humanoid") then
+                local hum = p.Character.Humanoid
+                local speed = hum.WalkSpeed
+                if speed > 18 then
+                    table.insert(suspects, p.Name .. " (Speed: " .. math.floor(speed) .. ")")
+                end
+                -- Простейшая проверка на noclip (можно углубить)
+                local root = p.Character:FindFirstChild("HumanoidRootPart")
+                if root and root.CanCollide == false then
+                    table.insert(suspects, p.Name .. " (Noclip)")
+                end
+            end
+        end
+        if #suspects > 0 then
+            detectedCheatersPara:SetContent(table.concat(suspects, "\n"))
+            Fluent:Notify({ Title = "Cheaters Detected", Content = #suspects .. " player(s) suspicious", Duration = 3 })
+        else
+            detectedCheatersPara:SetContent("None found")
+            Fluent:Notify({ Title = "Scan Complete", Content = "No cheaters detected", Duration = 2 })
+        end
+    end
+    
+    task.spawn(function()
+        while true do
+            task.wait(5)
+            if autoDetectToggle and autoDetectToggle.Value then
+                pcall(detectCheaters)
+            end
+        end
+    end)
+end
+
+-- ========================================================
+-- 🏃‍♂️ MISC (NOCLIP, FLY, SPEED) – оптимизировано
+-- ========================================================
+RunS.RenderStepped:Connect(function()
     local char = LP.Character
     if not char then return end
     local hum = char:FindFirstChild("Humanoid")
@@ -493,16 +622,16 @@ table.insert(CatalystThreads, RunS.RenderStepped:Connect(function()
             root.Velocity = Vector3.new(root.Velocity.X, 0, root.Velocity.Z)
         end
     end
-end))
+end)
 
-table.insert(CatalystThreads, UIS.JumpRequest:Connect(function()
+UIS.JumpRequest:Connect(function()
     if Options.Fly and Options.Fly.Value and LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") then
         LP.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
     end
-end))
+end)
 
 -- ========================================================
--- 💾 SAVE MANAGER
+-- 💾 SAVE MANAGER И ЗАВЕРШЕНИЕ
 -- ========================================================
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
@@ -513,8 +642,7 @@ InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 SaveManager:BuildConfigSection(Tabs.Settings)
 SaveManager:LoadAutoloadConfig()
 
--- Установка Home первой вкладкой (индекс 1)
-Window:SelectTab(1)
+Window:SelectTab(1) -- Home
 
 -- Очистка при смене персонажа
 LP.CharacterAdded:Connect(function()
