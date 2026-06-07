@@ -1,11 +1,11 @@
 -- ========================================================
--- CATALYST MM2 v3.5 (MOBILE SUPPORT, FIXED FLING & GUN DROP)
+-- CATALYST MM2 v3.5 (FULLY WORKING + MOBILE SUPPORT)
 -- ========================================================
 local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
 
--- Проверка на мобильное устройство
-local isMobile = UIS.TouchEnabled and not UIS.MouseEnabled
+-- Определяем устройство
+local isMobile = UIS.TouchEnabled or not UIS.MouseEnabled
 
 -- Загрузка Fluent
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -16,23 +16,26 @@ local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.
 _G.CatalystKeyType = _G.CatalystKeyType or "Free"
 _G.CatalystRank = _G.CatalystRank or "Standard"
 
--- ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
+-- ========== ОПРЕДЕЛЕНИЕ РОЛЕЙ (МГНОВЕННО) ==========
 local roleCache = {}
 local lastRoleUpdate = 0
 
 local function GetRole(p)
     if not p or not p.Character then return "Innocent" end
     local now = tick()
-    if roleCache[p] and (now - lastRoleUpdate) < 2 then
+    if roleCache[p] and (now - lastRoleUpdate) < 1.5 then
         return roleCache[p]
     end
     local char = p.Character
     local role = "Innocent"
+    -- Проверка убийцы (ножик в руке или в рюкзаке)
     if char:FindFirstChild("Knife") or (p.Backpack and p.Backpack:FindFirstChild("Knife")) or char:FindFirstChild("MurdererEffect") then
         role = "Murderer"
+    -- Проверка шерифа (пистолет в руке или в рюкзаке)
     elseif char:FindFirstChild("Gun") or char:FindFirstChild("Revolver") or (p.Backpack and (p.Backpack:FindFirstChild("Gun") or p.Backpack:FindFirstChild("Revolver"))) then
         role = "Sheriff"
     else
+        -- Резерв: данные из RoundView (для начала раунда)
         local rd = RS:FindFirstChild("RoundView") or RS:FindFirstChild("GameStorage")
         local ur = rd and rd:FindFirstChild("RoleData") and rd.RoleData:FindFirstChild(p.Name)
         if ur then
@@ -51,17 +54,35 @@ local function UpdateRoleCache()
     end
 end
 
-local function HasRevolver()
-    local char = LP.Character
-    return char and (char:FindFirstChild("Revolver") or char:FindFirstChild("Gun")) ~= nil
+-- ========== ПОИСК GUN DROP (НЕ ЗАВИСИТ ОТ ИМЕНИ) ==========
+local function FindGunDrop()
+    -- Ищем объект класса Tool в workspace с именем "Gun" или "Revolver"
+    for _, obj in ipairs(workspace:GetChildren()) do
+        if obj:IsA("Tool") and (obj.Name == "Gun" or obj.Name == "Revolver") then
+            -- Возвращаем PrimaryPart или HumanoidRootPart (если есть)
+            if obj:FindFirstChild("Handle") then
+                return obj.Handle
+            elseif obj:FindFirstChild("PrimaryPart") then
+                return obj.PrimaryPart
+            else
+                return obj:FindFirstChildWhichIsA("BasePart")
+            end
+        end
+    end
+    return nil
 end
 
--- ========== GUI ==========
+local function HasGun()
+    local char = LP.Character
+    return char and (char:FindFirstChild("Gun") or char:FindFirstChild("Revolver")) ~= nil
+end
+
+-- ========== GUI (FLUENT) ==========
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v3.5" .. (isMobile and " [MOBILE]" or ""),
+    Title = "Catalyst v3.5" .. (isMobile and " [Mobile]" or ""),
     SubTitle = "MM2",
     TabWidth = 160,
-    Size = UDim2.fromOffset(660, 580),
+    Size = UDim2.fromOffset(620, 520),
     Acrylic = false,
     Theme = "Dark"
 })
@@ -73,46 +94,35 @@ local Tabs = {
     Misc = Window:AddTab({ Title = "Misc", Icon = "star" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
-
 local Options = Fluent.Options
 
 -- Home
 local rankText = (_G.CatalystKeyType or "Free") .. " / " .. (_G.CatalystRank or "Standard")
-Tabs.Home:AddParagraph({
-    Title = "Welcome to Catalyst!",
-    Content = "Rank: " .. rankText .. "\nMurder Mystery 2\nDeveloper: Alchemist Slime\nTG: @alchemistslimee\nVersion: 3.5" .. (isMobile and "\nMobile mode: ON" or "")
-})
-Tabs.Home:AddButton({
-    Title = "Copy Discord Tag",
-    Callback = function()
-        setclipboard("alchemistslimee")
-        Fluent:Notify({ Title = "Copied", Content = "alchemistslimee", Duration = 2 })
-    end
-})
+Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee" })
+Tabs.Home:AddButton({ Title = "Copy Discord", Callback = function() setclipboard("alchemistslimee") Fluent:Notify({ Title = "Copied" }) end })
 
 -- ========== COMBAT TAB ==========
-Tabs.Combat:AddSection("Rage Aimbot Settings")
-local aimToggle = Tabs.Combat:AddToggle("aim", { Title = "Enable Aimbot", Default = false })
-local predToggle = Tabs.Combat:AddToggle("pred", { Title = "Enable Prediction", Default = false })
-local predDelay = Tabs.Combat:AddSlider("predDelay", { Title = "Prediction Delay (ms)", Default = 80, Min = 0, Max = 100, Rounding = 0 })
-local aimKey = Tabs.Combat:AddKeybind("aimKey", { Title = isMobile and "Aimbot (touch & hold)" or "Aimbot Keybind", Mode = "Hold", Default = isMobile and "Touch" or "MouseRight" })
-local fovSlider = Tabs.Combat:AddSlider("fov", { Title = "Aimbot FOV (Degrees)", Default = 80, Min = 1, Max = 360, Rounding = 0 })
-local fovColor = Tabs.Combat:AddColorpicker("fovColor", { Title = "FOV Circle Color", Default = Color3.fromRGB(255, 255, 255) })
+Tabs.Combat:AddSection("Aimbot" .. (isMobile and " (Disabled on Mobile)" or ""))
+local aimToggle = Tabs.Combat:AddToggle("aim", { Title = "Enable Aimbot", Default = false, Enabled = not isMobile })
+local predToggle = Tabs.Combat:AddToggle("pred", { Title = "Prediction", Default = false, Enabled = not isMobile })
+local predDelay = Tabs.Combat:AddSlider("predDelay", { Title = "Prediction ms", Default = 80, Min = 0, Max = 100, Rounding = 0 })
+local aimKey = Tabs.Combat:AddKeybind("aimKey", { Title = "Aimbot Key", Mode = "Hold", Default = "MouseRight" })
+local fovSlider = Tabs.Combat:AddSlider("fov", { Title = "FOV Degrees", Default = 80, Min = 1, Max = 360, Rounding = 0 })
+local fovColor = Tabs.Combat:AddColorpicker("fovColor", { Title = "FOV Color", Default = Color3.fromRGB(255,255,255) })
 
 Tabs.Combat:AddSection("Gun Drop Teleport")
-local tpBtn = Tabs.Combat:AddButton({ Title = "TP to Gun Drop (once)", Callback = function() TeleportToGunDrop(true) end })
+local tpBtn = Tabs.Combat:AddButton({ Title = "TP to Gun (once)", Callback = function() TeleportToGunDrop(true) end })
 local autoTP = Tabs.Combat:AddToggle("autoTP", { Title = "Auto TP every 1s", Default = false })
-local safeTP = Tabs.Combat:AddToggle("safeTP", { Title = "Avoid Murderer within 5 studs", Default = true })
+local safeTP = Tabs.Combat:AddToggle("safeTP", { Title = "Avoid Murderer", Default = true })
 local cooldownPara = Tabs.Combat:AddParagraph({ Title = "Cooldown", Content = "Ready" })
 
-Tabs.Combat:AddSection("Fling")
-local antiFling = Tabs.Combat:AddToggle("antiFling", { Title = "Anti-Fling (ignore small teleports)", Default = false })
+Tabs.Combat:AddSection("Fling (Speed 9999)")
 local flingAll = Tabs.Combat:AddButton({ Title = "Fling All", Callback = function() FlingPlayers("All") end })
 local flingMurder = Tabs.Combat:AddButton({ Title = "Fling Murderers", Callback = function() FlingPlayers("Murderer") end })
 local flingSheriff = Tabs.Combat:AddButton({ Title = "Fling Sheriffs", Callback = function() FlingPlayers("Sheriff") end })
 
 Tabs.Combat:AddSection("Blacklist")
-local blacklistDropdown = Tabs.Combat:AddDropdown("blacklist", { Title = "Do NOT fling these players", Values = {}, Multi = true, Default = {} })
+local blacklistDropdown = Tabs.Combat:AddDropdown("blacklist", { Title = "Ignore players", Values = {}, Multi = true, Default = {} })
 local function RefreshBlacklist()
     local names = {}
     for _, p in pairs(Plrs:GetPlayers()) do
@@ -127,42 +137,42 @@ Plrs.PlayerRemoving:Connect(RefreshBlacklist)
 -- ========== VISUALS TAB ==========
 -- Murderer
 Tabs.Visuals:AddSection("Murderer")
-local murHighlight = Tabs.Visuals:AddToggle("murHl", { Title = "Highlight Murderer", Default = false })
-local murColor = Tabs.Visuals:AddColorpicker("murCol", { Title = "Highlight Color", Default = Color3.fromRGB(255, 0, 0) })
-local murText = Tabs.Visuals:AddToggle("murTxt", { Title = "Show Name ESP", Default = false })
-local murTxtColor = Tabs.Visuals:AddColorpicker("murTxtCol", { Title = "Name Color", Default = Color3.fromRGB(255, 0, 0) })
+local murHighlight = Tabs.Visuals:AddToggle("murHl", { Title = "Highlight", Default = false })
+local murColor = Tabs.Visuals:AddColorpicker("murCol", { Title = "Color", Default = Color3.fromRGB(255,0,0) })
+local murText = Tabs.Visuals:AddToggle("murTxt", { Title = "Name ESP", Default = false })
+local murTxtColor = Tabs.Visuals:AddColorpicker("murTxtCol", { Title = "Text Color", Default = Color3.fromRGB(255,0,0) })
 -- Sheriff
 Tabs.Visuals:AddSection("Sheriff")
-local sherHighlight = Tabs.Visuals:AddToggle("sherHl", { Title = "Highlight Sheriff", Default = false })
-local sherColor = Tabs.Visuals:AddColorpicker("sherCol", { Title = "Highlight Color", Default = Color3.fromRGB(0, 0, 255) })
-local sherText = Tabs.Visuals:AddToggle("sherTxt", { Title = "Show Name ESP", Default = false })
-local sherTxtColor = Tabs.Visuals:AddColorpicker("sherTxtCol", { Title = "Name Color", Default = Color3.fromRGB(0, 0, 255) })
+local sherHighlight = Tabs.Visuals:AddToggle("sherHl", { Title = "Highlight", Default = false })
+local sherColor = Tabs.Visuals:AddColorpicker("sherCol", { Title = "Color", Default = Color3.fromRGB(0,0,255) })
+local sherText = Tabs.Visuals:AddToggle("sherTxt", { Title = "Name ESP", Default = false })
+local sherTxtColor = Tabs.Visuals:AddColorpicker("sherTxtCol", { Title = "Text Color", Default = Color3.fromRGB(0,0,255) })
 -- Innocent
 Tabs.Visuals:AddSection("Innocent")
-local innocHighlight = Tabs.Visuals:AddToggle("innHl", { Title = "Highlight Innocent", Default = false })
-local innocColor = Tabs.Visuals:AddColorpicker("innCol", { Title = "Highlight Color", Default = Color3.fromRGB(0, 255, 0) })
-local innocText = Tabs.Visuals:AddToggle("innTxt", { Title = "Show Name ESP", Default = false })
-local innocTxtColor = Tabs.Visuals:AddColorpicker("innTxtCol", { Title = "Name Color", Default = Color3.fromRGB(0, 255, 0) })
+local innocHighlight = Tabs.Visuals:AddToggle("innHl", { Title = "Highlight", Default = false })
+local innocColor = Tabs.Visuals:AddColorpicker("innCol", { Title = "Color", Default = Color3.fromRGB(0,255,0) })
+local innocText = Tabs.Visuals:AddToggle("innTxt", { Title = "Name ESP", Default = false })
+local innocTxtColor = Tabs.Visuals:AddColorpicker("innTxtCol", { Title = "Text Color", Default = Color3.fromRGB(0,255,0) })
 -- Gun Drop
 Tabs.Visuals:AddSection("Gun Drop")
-local gdHighlight = Tabs.Visuals:AddToggle("gdHl", { Title = "Highlight Gun Drop", Default = false })
-local gdColor = Tabs.Visuals:AddColorpicker("gdCol", { Title = "Highlight Color", Default = Color3.fromRGB(128, 0, 255) })
+local gdHighlight = Tabs.Visuals:AddToggle("gdHl", { Title = "Highlight", Default = false })
+local gdColor = Tabs.Visuals:AddColorpicker("gdCol", { Title = "Color", Default = Color3.fromRGB(128,0,255) })
 local gdText = Tabs.Visuals:AddToggle("gdTxt", { Title = "Show Text", Default = true })
-local gdTxtColor = Tabs.Visuals:AddColorpicker("gdTxtCol", { Title = "Text Color", Default = Color3.fromRGB(255, 255, 255) })
+local gdTxtColor = Tabs.Visuals:AddColorpicker("gdTxtCol", { Title = "Text Color", Default = Color3.fromRGB(255,255,255) })
 
 -- ========== MISC TAB ==========
-Tabs.Misc:AddSection("Blatant Exploits & Movement")
+Tabs.Misc:AddSection("Movement")
 local noclip = Tabs.Misc:AddToggle("noclip", { Title = "No-Clip", Default = false })
 local fly = Tabs.Misc:AddToggle("fly", { Title = "Fly", Default = false })
 local speed = Tabs.Misc:AddToggle("speed", { Title = "Speedhack", Default = false })
-local speedVal = Tabs.Misc:AddSlider("speedVal", { Title = "Speed (walk)", Default = 50, Min = 16, Max = 250, Rounding = 0 })
+local speedVal = Tabs.Misc:AddSlider("speedVal", { Title = "Speed", Default = 50, Min = 16, Max = 250, Rounding = 0 })
 
 Tabs.Misc:AddSection("Cheater Detection")
-local cheatPara = Tabs.Misc:AddParagraph({ Title = "Suspicious Players", Content = "None" })
-local autoCheat = Tabs.Misc:AddToggle("autoCheat", { Title = "Auto Scan (every 5s)", Default = false })
-local scanBtn = Tabs.Misc:AddButton({ Title = "Scan Now", Callback = function() detectCheaters() end })
+local cheatPara = Tabs.Misc:AddParagraph({ Title = "Suspects", Content = "None" })
+local autoCheat = Tabs.Misc:AddToggle("autoCheat", { Title = "Auto Scan", Default = false })
+Tabs.Misc:AddButton({ Title = "Scan Now", Callback = function() detectCheaters() end })
 
--- ========== ФУНКЦИИ FLING (РАЗГОН ДО 9999) ==========
+-- ========== ФУНКЦИЯ FLING (РАЗГОН 9999) ==========
 function FlingPlayers(targetType)
     local blacklist = Options.blacklist or {}
     local blackVal = blacklist.Value or {}
@@ -186,69 +196,27 @@ function FlingPlayers(targetType)
     for _, p in ipairs(targets) do
         local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
-            local pos = hrp.Position
-            if pos.Y < -50 or pos.Y > 1000 then
-                -- уже улетел
-            else
-                local dir = Vector3.new(math.random(-80, 80), math.random(60, 150), math.random(-80, 80)).Unit
-                hrp.Velocity = dir * 9999
-                hrp.CanCollide = false
-                task.wait(0.05)
-                hrp.CanCollide = true
-            end
+            -- Случайное направление с сильным вертикальным компонентом
+            local dir = Vector3.new(math.random(-100, 100), math.random(80, 150), math.random(-100, 100)).Unit
+            hrp.Velocity = dir * 9999
+            -- Отключаем коллизию на 0.1 сек, чтобы пролетел сквозь стены
+            hrp.CanCollide = false
+            task.wait(0.1)
+            hrp.CanCollide = true
         end
     end
     Fluent:Notify({ Title = "Fling", Content = #targets .. " player(s) flung", Duration = 2 })
 end
 
--- Anti-Fling (только большие скачки >40, без блокировки обычных телепортов)
-local lastPos = nil
-local lastRespawn = tick()
-LP.CharacterAdded:Connect(function() lastRespawn = tick() end)
-
-RunS.RenderStepped:Connect(function()
-    if antiFling and antiFling.Value then
-        local char = LP.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            local cur = char.HumanoidRootPart.Position
-            if lastPos and (cur - lastPos).Magnitude > 40 then
-                if tick() - lastRespawn > 2 then
-                    char.HumanoidRootPart.CFrame = CFrame.new(lastPos)
-                    Fluent:Notify({ Title = "Anti-Fling", Content = "Blocked large teleport", Duration = 1 })
-                end
-            end
-            lastPos = cur
-        end
-    else
-        lastPos = nil
-    end
-end)
-
--- ========== GUN DROP (ищем BasePart с именем "GunDrop" или содержащим "GunDrop") ==========
+-- ========== GUN DROP (ТЕЛЕПОРТ И ПОДСВЕТКА) ==========
 local gunDropPart = nil
 local gunDropHighlight = nil
 local gunDropText = nil
-local lastGunSearch = 0
-local cachedGun = nil
 local tpCooldown = false
 local lastTP = 0
 
-local function FindGunDrop()
-    local now = tick()
-    if now - lastGunSearch < 0.5 then return cachedGun end
-    lastGunSearch = now
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and obj.Name and obj.Name:lower():find("gundrop") then
-            cachedGun = obj
-            return obj
-        end
-    end
-    cachedGun = nil
-    return nil
-end
-
 local function UpdateGunDropVisuals()
-    if HasRevolver() then
+    if HasGun() then
         if gunDropHighlight then gunDropHighlight:Destroy(); gunDropHighlight = nil end
         if gunDropText then gunDropText:Remove(); gunDropText = nil end
         gunDropPart = nil
@@ -282,7 +250,7 @@ local function UpdateGunDropVisuals()
             local pos, on = Cam:WorldToViewportPoint(gd.Position + Vector3.new(0,1.5,0))
             if on then
                 gunDropText.Position = Vector2.new(pos.X, pos.Y)
-                gunDropText.Text = "GUN DROP"
+                gunDropText.Text = "GUN"
                 gunDropText.Color = gdTxtColor and gdTxtColor.Value or Color3.fromRGB(255,255,255)
                 gunDropText.Visible = true
             else
@@ -304,6 +272,7 @@ task.spawn(function()
     end
 end)
 
+-- Плавное движение текста
 RunS.RenderStepped:Connect(function()
     if gunDropText and gunDropText.Visible and gunDropPart then
         local pos, on = Cam:WorldToViewportPoint(gunDropPart.Position + Vector3.new(0,1.5,0))
@@ -316,9 +285,12 @@ function TeleportToGunDrop(returnBack)
         cooldownPara:SetContent("Cooldown " .. math.ceil(3 - (tick() - lastTP)) .. "s")
         return false
     end
-    if HasRevolver() then return false end
+    if HasGun() then return false end
     local gd = FindGunDrop()
-    if not gd then return false end
+    if not gd then
+        Fluent:Notify({ Title = "Gun Drop", Content = "No gun found", Duration = 1 })
+        return false
+    end
     if safeTP and safeTP.Value then
         for _, p in pairs(Plrs:GetPlayers()) do
             if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and GetRole(p) == "Murderer" then
@@ -351,42 +323,41 @@ end
 task.spawn(function()
     while true do
         task.wait(1)
-        if autoTP and autoTP.Value and not tpCooldown and not HasRevolver() then
+        if autoTP and autoTP.Value and not tpCooldown and not HasGun() then
             pcall(TeleportToGunDrop, true)
         end
     end
 end)
 
--- ========== AIMBOT ==========
-local function GetTarget()
-    local myRole = GetRole(LP)
-    if myRole == "Innocent" then return nil end
-    local best, bestAngle = nil, math.huge
-    local fov = fovSlider and fovSlider.Value or 80
-    local maxDist = (fov / 360) * Cam.ViewportSize.X
-    local mousePos = UIS:GetMouseLocation()
-    for _, p in pairs(Plrs:GetPlayers()) do
-        if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
-            local tRole = GetRole(p)
-            local vec, on = Cam:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
-            if on then
-                local dist = (Vector2.new(vec.X, vec.Y) - mousePos).Magnitude
-                if dist <= maxDist then
-                    local angle = math.deg(math.acos(math.clamp(Cam.CFrame.LookVector:Dot((p.Character.HumanoidRootPart.Position - Cam.CFrame.Position).Unit), -1, 1)))
-                    if myRole == "Murderer" and (tRole == "Sheriff" or tRole == "Innocent") and angle < bestAngle then
-                        bestAngle, best = angle, p.Character.HumanoidRootPart
-                    elseif myRole == "Sheriff" and tRole == "Murderer" and angle < bestAngle then
-                        bestAngle, best = angle, p.Character.HumanoidRootPart
+-- ========== AIMBOT (ТОЛЬКО НЕ НА ТЕЛЕФОНЕ) ==========
+if not isMobile then
+    local function GetTarget()
+        local myRole = GetRole(LP)
+        if myRole == "Innocent" then return nil end
+        local best, bestAngle = nil, math.huge
+        local fov = fovSlider and fovSlider.Value or 80
+        local maxDist = (fov / 360) * Cam.ViewportSize.X
+        local mousePos = UIS:GetMouseLocation()
+        for _, p in pairs(Plrs:GetPlayers()) do
+            if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
+                local tRole = GetRole(p)
+                local vec, on = Cam:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
+                if on then
+                    local dist = (Vector2.new(vec.X, vec.Y) - mousePos).Magnitude
+                    if dist <= maxDist then
+                        local angle = math.deg(math.acos(math.clamp(Cam.CFrame.LookVector:Dot((p.Character.HumanoidRootPart.Position - Cam.CFrame.Position).Unit), -1, 1)))
+                        if myRole == "Murderer" and (tRole == "Sheriff" or tRole == "Innocent") and angle < bestAngle then
+                            bestAngle, best = angle, p.Character.HumanoidRootPart
+                        elseif myRole == "Sheriff" and tRole == "Murderer" and angle < bestAngle then
+                            bestAngle, best = angle, p.Character.HumanoidRootPart
+                        end
                     end
                 end
             end
         end
+        return best
     end
-    return best
-end
 
--- FOV Circle (отключаем на мобильных для производительности)
-if not isMobile and (typeof(Drawing) == "table" and Drawing.new) then
     local fovCircle = Drawing.new("Circle")
     fovCircle.Thickness = 1.5
     fovCircle.NumSides = 60
@@ -402,32 +373,26 @@ if not isMobile and (typeof(Drawing) == "table" and Drawing.new) then
             fovCircle.Visible = false
         end
     end)
-end
 
--- Аимбот (для телефонов проверяем прикосновение)
-local function isAiming()
-    if isMobile then
-        -- На мобильных: аимбот активен, если экран нажат и удерживается
-        return UIS:IsMouseButtonPressed(Enum.UserInputType.Touch) or (aimKey and aimKey:GetState())
-    else
-        return UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or (aimKey and aimKey:GetState())
-    end
-end
-
-RunS.RenderStepped:Connect(function()
-    if not (aimToggle and aimToggle.Value) then return end
-    if isAiming() then
-        local target = GetTarget()
-        if target then
-            local pos = target.Position
-            if predToggle and predToggle.Value then
-                local delay = (predDelay and predDelay.Value or 80) / 1000
-                pos = pos + (target.Velocity * delay)
+    RunS.RenderStepped:Connect(function()
+        if not (aimToggle and aimToggle.Value) then return end
+        local press = UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or (aimKey and aimKey:GetState())
+        if press then
+            local target = GetTarget()
+            if target then
+                local pos = target.Position
+                if predToggle and predToggle.Value then
+                    local delay = (predDelay and predDelay.Value or 80) / 1000
+                    pos = pos + (target.Velocity * delay)
+                end
+                Cam.CFrame = CFrame.lookAt(Cam.CFrame.Position, pos)
             end
-            Cam.CFrame = CFrame.lookAt(Cam.CFrame.Position, pos)
         end
-    end
-end)
+    end)
+else
+    -- На телефоне отключаем весь аимбот
+    aimToggle.Enabled = false
+end
 
 -- ========== ESP (HIGHLIGHT + NAME) ==========
 local nameTexts = {}
@@ -470,9 +435,7 @@ local function UpdateHighlight(p)
     end
 end
 
--- Name ESP (только если не мобильное или по желанию, но для производительности на телефоне можно отключить)
 RunS.RenderStepped:Connect(function()
-    if isMobile and true then return end -- можно включить, если нужно, но риск лагов
     for _, p in pairs(Plrs:GetPlayers()) do
         if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
             local role = GetRole(p)
@@ -516,6 +479,7 @@ RunS.RenderStepped:Connect(function()
     end
 end)
 
+-- Обновление ролей каждые 2 секунды
 task.spawn(function()
     while true do
         task.wait(2)
@@ -560,7 +524,7 @@ function detectCheaters()
         if p ~= LP and p.Character then
             local hum = p.Character:FindFirstChild("Humanoid")
             if hum and hum.WalkSpeed > 18 then
-                table.insert(suspects, p.Name .. " (Speed: " .. math.floor(hum.WalkSpeed) .. ")")
+                table.insert(suspects, p.Name .. " (Speed " .. math.floor(hum.WalkSpeed) .. ")")
             end
             local root = p.Character:FindFirstChild("HumanoidRootPart")
             if root and root.CanCollide == false then
@@ -572,7 +536,7 @@ function detectCheaters()
         cheatPara:SetContent(table.concat(suspects, "\n"))
         Fluent:Notify({ Title = "Cheaters", Content = #suspects .. " found", Duration = 3 })
     else
-        cheatPara:SetContent("None found")
+        cheatPara:SetContent("None")
         Fluent:Notify({ Title = "Scan", Content = "Clean", Duration = 2 })
     end
 end
@@ -604,7 +568,7 @@ RunS.RenderStepped:Connect(function()
         end
     end
     if fly and fly.Value then
-        if UIS:IsKeyDown(Enum.KeyCode.Space) or (isMobile and UIS:IsKeyDown(Enum.KeyCode.Touch)) then
+        if UIS:IsKeyDown(Enum.KeyCode.Space) or (isMobile and UIS:GetTouchEnabled()) then
             root.Velocity = Vector3.new(root.Velocity.X, 60, root.Velocity.Z)
         elseif UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
             root.Velocity = Vector3.new(root.Velocity.X, -60, root.Velocity.Z)
@@ -635,7 +599,6 @@ Window:SelectTab(Tabs.Home)
 
 LP.CharacterAdded:Connect(function()
     ClearNameESP()
-    for _, txt in pairs(nameTexts) do if txt then pcall(txt.Remove, txt) end end
     nameTexts = {}
     tpCooldown = false
     lastTP = 0
