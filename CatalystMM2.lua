@@ -1,12 +1,12 @@
 -- ========================================================
--- CATALYST MM2 v5.0 (LIGHT + MOBILE OPTIMIZED)
+-- CATALYST MM2 v5.1 (AIMBOT BACK, LIGHT & FAST)
 -- ========================================================
 local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
 
 local isMobile = UIS.TouchEnabled or not UIS.MouseEnabled
 
--- Загрузка Fluent (только UI)
+-- Загрузка Fluent
 local Fluent, SaveManager, InterfaceManager
 local ok = pcall(function()
     Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -21,7 +21,7 @@ end
 _G.CatalystKeyType = _G.CatalystKeyType or "Free"
 _G.CatalystRank = _G.CatalystRank or "Standard"
 
--- ========== ОПРЕДЕЛЕНИЕ РОЛЕЙ (КЭШ) ==========
+-- ========== ОПРЕДЕЛЕНИЕ РОЛЕЙ ==========
 local roleCache = {}
 local lastRoleUpdate = 0
 
@@ -63,16 +63,14 @@ local function FindGunDrop()
     return nil
 end
 
--- ========== ТЕЛЕПОРТ К GUN DROP (С КУЛДАУНОМ) ==========
+-- ========== ТЕЛЕПОРТ К GUN DROP ==========
 local tpCooldown = false
 local lastTP = 0
 local cooldownPara = nil
 
 local function TeleportToGunDrop(returnBack)
     if tpCooldown then
-        if cooldownPara then
-            cooldownPara:SetContent("Cooldown " .. math.ceil(3 - (tick() - lastTP)) .. "s")
-        end
+        if cooldownPara then cooldownPara:SetContent("Cooldown " .. math.ceil(3 - (tick() - lastTP)) .. "s") end
         return false
     end
     if HasGun() then return false end
@@ -99,10 +97,10 @@ end
 
 -- ========== GUI ==========
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v5.0" .. (isMobile and " [Mobile]" or ""),
+    Title = "Catalyst v5.1" .. (isMobile and " [Mobile]" or ""),
     SubTitle = "MM2",
     TabWidth = 160,
-    Size = UDim2.fromOffset(550, 480),
+    Size = UDim2.fromOffset(550, 500),
     Acrylic = false,
     Theme = "Dark"
 })
@@ -118,16 +116,26 @@ local Options = Fluent.Options
 
 -- Home
 local rankText = (_G.CatalystKeyType or "Free") .. " / " .. (_G.CatalystRank or "Standard")
-Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 5.0 (Light)" })
+Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 5.1" })
 Tabs.Home:AddButton({ Title = "Copy Discord", Callback = function() setclipboard("alchemistslimee") Fluent:Notify({ Title = "Copied" }) end })
 
 -- ========== COMBAT TAB ==========
+if not isMobile then
+    Tabs.Combat:AddSection("Aimbot (PC only)")
+    local aimToggle = Tabs.Combat:AddToggle("aim", { Title = "Enable Aimbot", Default = false })
+    local predToggle = Tabs.Combat:AddToggle("pred", { Title = "Prediction", Default = false })
+    local predDelay = Tabs.Combat:AddSlider("predDelay", { Title = "Prediction ms", Default = 80, Min = 0, Max = 100, Rounding = 0 })
+    local aimKey = Tabs.Combat:AddKeybind("aimKey", { Title = "Aimbot Key", Mode = "Hold", Default = "MouseRight" })
+    local fovSlider = Tabs.Combat:AddSlider("fov", { Title = "FOV Degrees", Default = 80, Min = 1, Max = 360, Rounding = 0 })
+    local fovColor = Tabs.Combat:AddColorpicker("fovColor", { Title = "FOV Color", Default = Color3.fromRGB(255,255,255) })
+end
+
 Tabs.Combat:AddSection("Gun Drop Teleport")
 local tpBtn = Tabs.Combat:AddButton({ Title = "TP to Gun (once)", Callback = function() TeleportToGunDrop(true) end })
 local autoTP = Tabs.Combat:AddToggle("autoTP", { Title = "Auto TP every 2s", Default = false })
 cooldownPara = Tabs.Combat:AddParagraph({ Title = "Cooldown", Content = "Ready" })
 
--- ========== VISUALS TAB (ТОЛЬКО HIGHLIGHT, БЕЗ DRAWING НА ТЕЛЕФОНЕ) ==========
+-- ========== VISUALS TAB ==========
 Tabs.Visuals:AddSection("Highlight ESP")
 local murHighlight = Tabs.Visuals:AddToggle("murHl", { Title = "Highlight Murderer", Default = false })
 local murColor = Tabs.Visuals:AddColorpicker("murCol", { Title = "Color", Default = Color3.fromRGB(255,0,0) })
@@ -138,7 +146,6 @@ local innocColor = Tabs.Visuals:AddColorpicker("innCol", { Title = "Color", Defa
 local gdHighlight = Tabs.Visuals:AddToggle("gdHl", { Title = "Highlight Gun", Default = false })
 local gdColor = Tabs.Visuals:AddColorpicker("gdCol", { Title = "Color", Default = Color3.fromRGB(128,0,255) })
 
--- Name ESP только для ПК (очень лёгкое)
 if not isMobile then
     Tabs.Visuals:AddSection("Name ESP (PC only)")
     local murText = Tabs.Visuals:AddToggle("murTxt", { Title = "Murderer Names", Default = false })
@@ -211,7 +218,7 @@ local function UpdateGunDropHighlight()
     end
 end
 
--- Цикл обновления ролей и подсветки (редко, чтобы не грузить)
+-- Цикл обновления ролей и подсветки
 task.spawn(function()
     while true do
         task.wait(2)
@@ -222,13 +229,9 @@ task.spawn(function()
     end
 end)
 
--- Имена ESP для ПК (обновляются в RenderStepped, но только если включены)
+-- Name ESP для ПК (только если включён)
 if not isMobile then
     local nameTexts = {}
-    local function ClearNameESP()
-        for _, txt in pairs(nameTexts) do if txt and txt.Remove then txt:Remove() end end
-        nameTexts = {}
-    end
     RunS.RenderStepped:Connect(function()
         for _, p in pairs(Plrs:GetPlayers()) do
             if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
@@ -274,7 +277,7 @@ if not isMobile then
     end)
 end
 
--- ========== ДВИЖЕНИЕ (ОПТИМИЗИРОВАННОЕ) ==========
+-- ========== ДВИЖЕНИЕ ==========
 RunS.RenderStepped:Connect(function()
     local char = LP.Character
     if not char then return end
@@ -312,7 +315,7 @@ UIS.JumpRequest:Connect(function()
     end
 end)
 
--- ========== АВТО-ТП (ПРОСТОЙ ЦИКЛ) ==========
+-- ========== АВТО-ТП ==========
 task.spawn(function()
     while true do
         task.wait(2)
@@ -321,6 +324,68 @@ task.spawn(function()
         end
     end
 end)
+
+-- ========== АИМБОТ ДЛЯ ПК ==========
+if not isMobile then
+    local function GetTarget()
+        local myRole = GetRole(LP)
+        if myRole == "Innocent" then return nil end
+        local best, bestAngle = nil, math.huge
+        local fov = Options.fov and Options.fov.Value or 80
+        local maxDist = (fov / 360) * Cam.ViewportSize.X
+        local mousePos = UIS:GetMouseLocation()
+        for _, p in pairs(Plrs:GetPlayers()) do
+            if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
+                local tRole = GetRole(p)
+                local vec, on = Cam:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
+                if on then
+                    local dist = (Vector2.new(vec.X, vec.Y) - mousePos).Magnitude
+                    if dist <= maxDist then
+                        local angle = math.deg(math.acos(math.clamp(Cam.CFrame.LookVector:Dot((p.Character.HumanoidRootPart.Position - Cam.CFrame.Position).Unit), -1, 1)))
+                        if myRole == "Murderer" and (tRole == "Sheriff" or tRole == "Innocent") and angle < bestAngle then
+                            bestAngle, best = angle, p.Character.HumanoidRootPart
+                        elseif myRole == "Sheriff" and tRole == "Murderer" and angle < bestAngle then
+                            bestAngle, best = angle, p.Character.HumanoidRootPart
+                        end
+                    end
+                end
+            end
+        end
+        return best
+    end
+
+    local fovCircle = Drawing.new("Circle")
+    fovCircle.Thickness = 1.5
+    fovCircle.NumSides = 60
+    fovCircle.Filled = false
+    fovCircle.Transparency = 1
+    RunS.RenderStepped:Connect(function()
+        if Options.aim and Options.aim.Value then
+            fovCircle.Visible = true
+            fovCircle.Radius = (Options.fov and Options.fov.Value or 80) / 360 * Cam.ViewportSize.X
+            fovCircle.Color = Options.fovColor and Options.fovColor.Value or Color3.fromRGB(255,255,255)
+            fovCircle.Position = UIS:GetMouseLocation()
+        else
+            fovCircle.Visible = false
+        end
+    end)
+
+    RunS.RenderStepped:Connect(function()
+        if not (Options.aim and Options.aim.Value) then return end
+        local press = UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or (Options.aimKey and Options.aimKey:GetState())
+        if press then
+            local target = GetTarget()
+            if target then
+                local pos = target.Position
+                if Options.pred and Options.pred.Value then
+                    local delay = (Options.predDelay and Options.predDelay.Value or 80) / 1000
+                    pos = pos + (target.Velocity * delay)
+                end
+                Cam.CFrame = CFrame.lookAt(Cam.CFrame.Position, pos)
+            end
+        end
+    end)
+end
 
 -- ========== SAVE MANAGER ==========
 SaveManager:SetLibrary(Fluent)
