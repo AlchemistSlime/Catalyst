@@ -1,20 +1,19 @@
 -- ========================================================
--- CATALYST MM2 v4.1 (TP TO GUN + FAST COIN TP)
+-- CATALYST MM2 v4.2 (STABLE: TP + COIN FARM + ESP)
 -- ========================================================
 local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
 
 local isMobile = UIS.TouchEnabled or not UIS.MouseEnabled
 
--- Безопасная загрузка Fluent
+-- Загрузка Fluent с проверкой
 local Fluent, SaveManager, InterfaceManager
-local success, err = pcall(function()
+local loadSuccess = pcall(function()
     Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
     SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
     InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 end)
-if not success then
-    warn("[Catalyst] Failed to load Fluent: " .. tostring(err))
+if not loadSuccess then
     game:GetService("StarterGui"):SetCore("SendNotification", {Title="Catalyst Error", Text="Failed to load UI", Duration=5})
     return
 end
@@ -22,7 +21,7 @@ end
 _G.CatalystKeyType = _G.CatalystKeyType or "Free"
 _G.CatalystRank = _G.CatalystRank or "Standard"
 
--- ========== ОПРЕДЕЛЕНИЕ РОЛЕЙ ==========
+-- ========== ОПРЕДЕЛЕНИЕ РОЛЕЙ (кэш) ==========
 local roleCache = {}
 local lastRoleUpdate = 0
 
@@ -64,7 +63,7 @@ local function FindGunDrop()
     return nil
 end
 
--- ========== ТЕЛЕПОРТ К GUN DROP (с возвратом) ==========
+-- ========== ТЕЛЕПОРТ К GUN DROP ==========
 local tpCooldown = false
 local lastTP = 0
 local cooldownPara = nil
@@ -96,14 +95,13 @@ local function TeleportToGunDrop(returnBack)
     return true
 end
 
--- ========== АВТОФАРМ МОНЕТ (быстрый TP с проверкой видимости) ==========
+-- ========== АВТОФАРМ МОНЕТ (Coin_Server) ==========
 local CoinServerPart = nil
 local lastCoinLog = 0
 local coinLogCount = 0
 
 local function GetCoinServer()
     if CoinServerPart and CoinServerPart.Parent then return CoinServerPart end
-    -- Ищем Coin_Server в CoinContainer или глубже
     local container = workspace:FindFirstChild("CoinContainer")
     if container then
         CoinServerPart = container:FindFirstChild("Coin_Server") or container:FindFirstChild("CoinServer")
@@ -115,7 +113,7 @@ local function GetCoinServer()
             return CoinServerPart
         end
     end
-    -- Логируем редко
+    -- Логируем редко, без спама уведомлений
     local now = tick()
     if now - lastCoinLog > 5 then
         coinLogCount = 1
@@ -135,7 +133,6 @@ local function FarmCoins()
     if farmCooldown then return end
     local cs = GetCoinServer()
     if not cs then return end
-    -- Проверка видимости (можно опционально)
     local char = LP.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -143,20 +140,20 @@ local function FarmCoins()
     farmCooldown = true
     local orig = hrp.CFrame
     hrp.CFrame = cs.CFrame * CFrame.new(0, 2, 0)
-    task.wait(0.15)  -- быстрее
+    task.wait(0.2)                -- Достаточно времени для срабатывания триггера
     if hrp and hrp.Parent then
         hrp.CFrame = orig
     end
-    task.wait(0.3)
+    task.wait(0.5)
     farmCooldown = false
 end
 
--- ========== GUI ==========
+-- ========== GUI (FLUENT) ==========
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v4.1" .. (isMobile and " [Mobile]" or ""),
+    Title = "Catalyst v4.2" .. (isMobile and " [Mobile]" or ""),
     SubTitle = "MM2",
     TabWidth = 160,
-    Size = UDim2.fromOffset(580, 480),
+    Size = UDim2.fromOffset(580, 500),
     Acrylic = false,
     Theme = "Dark"
 })
@@ -172,10 +169,11 @@ local Options = Fluent.Options
 
 -- Home
 local rankText = (_G.CatalystKeyType or "Free") .. " / " .. (_G.CatalystRank or "Standard")
-Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 4.1 (Fast TP)" })
+Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 4.2" })
 Tabs.Home:AddButton({ Title = "Copy Discord", Callback = function() setclipboard("alchemistslimee") Fluent:Notify({ Title = "Copied" }) end })
 
 -- ========== COMBAT TAB ==========
+-- Aimbot (только ПК)
 if not isMobile then
     Tabs.Combat:AddSection("Aimbot (PC only)")
     local aimToggle = Tabs.Combat:AddToggle("aim", { Title = "Enable Aimbot", Default = false })
@@ -186,16 +184,18 @@ if not isMobile then
     local fovColor = Tabs.Combat:AddColorpicker("fovColor", { Title = "FOV Color", Default = Color3.fromRGB(255,255,255) })
 end
 
+-- Gun Drop Teleport
 Tabs.Combat:AddSection("Gun Drop Teleport")
 local tpBtn = Tabs.Combat:AddButton({ Title = "TP to Gun (once)", Callback = function() TeleportToGunDrop(true) end })
 local autoTP = Tabs.Combat:AddToggle("autoTP", { Title = "Auto TP every 2s", Default = false })
 cooldownPara = Tabs.Combat:AddParagraph({ Title = "Cooldown", Content = "Ready" })
 
+-- Coin Farm
 Tabs.Combat:AddSection("Coin Farm")
 local farmBtn = Tabs.Combat:AddButton({ Title = "Farm Coins (once)", Callback = function() FarmCoins() end })
 local autoFarm = Tabs.Combat:AddToggle("autoFarm", { Title = "Auto Farm Coins (every 2s)", Default = false })
 
--- ========== VISUALS TAB (только подсветка, без Drawing на телефоне) ==========
+-- ========== VISUALS TAB ==========
 Tabs.Visuals:AddSection("Highlight ESP")
 local murHighlight = Tabs.Visuals:AddToggle("murHl", { Title = "Highlight Murderer", Default = false })
 local murColor = Tabs.Visuals:AddColorpicker("murCol", { Title = "Color", Default = Color3.fromRGB(255,0,0) })
@@ -223,7 +223,7 @@ local fly = Tabs.Misc:AddToggle("fly", { Title = "Fly", Default = false })
 local speed = Tabs.Misc:AddToggle("speed", { Title = "Speedhack", Default = false })
 local speedVal = Tabs.Misc:AddSlider("speedVal", { Title = "Speed", Default = 50, Min = 16, Max = 250, Rounding = 0 })
 
--- ========== ESP HIGHLIGHT (без Drawing на телефоне) ==========
+-- ========== ESP HIGHLIGHT ==========
 local function UpdateHighlight(p)
     if not p or p == LP or not p.Character then return end
     local role = GetRole(p)
@@ -290,7 +290,7 @@ task.spawn(function()
     end
 end)
 
--- Имена ESP для ПК (через Drawing)
+-- Имена ESP только для ПК
 if not isMobile then
     local nameTexts = {}
     local function ClearNameESP()
@@ -377,7 +377,7 @@ UIS.JumpRequest:Connect(function()
     end
 end)
 
--- ========== АВТО-ТП И АВТОФАРМ ==========
+-- ========== АВТОМАТИЧЕСКИЕ ЦИКЛЫ (ТП и ФАРМ) ==========
 task.spawn(function()
     while true do
         task.wait(2)
