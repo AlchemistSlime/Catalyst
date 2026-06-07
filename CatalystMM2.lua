@@ -188,27 +188,25 @@ function FlingPlayers(targetType)
         Fluent:Notify({ Title = "Fling", Content = "No targets", Duration = 2 })
         return
     end
-    local origPos = {}
     for _, p in ipairs(targets) do
         local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
-            origPos[p] = hrp.CFrame
-            -- Подбрасываем вверх
-            hrp.CFrame = hrp.CFrame * CFrame.new(0, 50, 0)
-            hrp.Velocity = Vector3.new(math.random(-30,30), 60, math.random(-30,30)) -- добавим импульс
-        end
-    end
-    task.wait(0.3)
-    for p, cf in pairs(origPos) do
-        local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            hrp.CFrame = cf
-            hrp.Velocity = Vector3.zero
+            local pos = hrp.Position
+            -- Пропускаем уже улетевших
+            if pos.Y < -50 or pos.Y > 1000 then
+                continue
+            end
+            -- Случайное направление (с большим уклоном вверх)
+            local dir = Vector3.new(math.random(-80, 80), math.random(60, 150), math.random(-80, 80)).Unit
+            hrp.Velocity = dir * 9999
+            -- Быстро отключаем и включаем коллизию, чтобы пролетел сквозь стены
+            hrp.CanCollide = false
+            task.wait(0.05)
+            hrp.CanCollide = true
         end
     end
     Fluent:Notify({ Title = "Fling", Content = #targets .. " player(s) flung", Duration = 2 })
 end
-
 -- Anti-Fling с игнорированием малых перемещений и временной блокировкой после респавна
 local lastPos = nil
 local lastRespawn = tick()
