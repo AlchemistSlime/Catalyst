@@ -1,19 +1,19 @@
 -- ========================================================
--- CATALYST MM2 v4.2 (STABLE: TP + COIN FARM + ESP)
+-- CATALYST MM2 v5.0 (LIGHT + MOBILE OPTIMIZED)
 -- ========================================================
 local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
 
 local isMobile = UIS.TouchEnabled or not UIS.MouseEnabled
 
--- Загрузка Fluent с проверкой
+-- Загрузка Fluent (только UI)
 local Fluent, SaveManager, InterfaceManager
-local loadSuccess = pcall(function()
+local ok = pcall(function()
     Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
     SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
     InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 end)
-if not loadSuccess then
+if not ok then
     game:GetService("StarterGui"):SetCore("SendNotification", {Title="Catalyst Error", Text="Failed to load UI", Duration=5})
     return
 end
@@ -21,7 +21,7 @@ end
 _G.CatalystKeyType = _G.CatalystKeyType or "Free"
 _G.CatalystRank = _G.CatalystRank or "Standard"
 
--- ========== ОПРЕДЕЛЕНИЕ РОЛЕЙ (кэш) ==========
+-- ========== ОПРЕДЕЛЕНИЕ РОЛЕЙ (КЭШ) ==========
 local roleCache = {}
 local lastRoleUpdate = 0
 
@@ -63,14 +63,16 @@ local function FindGunDrop()
     return nil
 end
 
--- ========== ТЕЛЕПОРТ К GUN DROP ==========
+-- ========== ТЕЛЕПОРТ К GUN DROP (С КУЛДАУНОМ) ==========
 local tpCooldown = false
 local lastTP = 0
 local cooldownPara = nil
 
 local function TeleportToGunDrop(returnBack)
     if tpCooldown then
-        if cooldownPara then cooldownPara:SetContent("Cooldown " .. math.ceil(3 - (tick() - lastTP)) .. "s") end
+        if cooldownPara then
+            cooldownPara:SetContent("Cooldown " .. math.ceil(3 - (tick() - lastTP)) .. "s")
+        end
         return false
     end
     if HasGun() then return false end
@@ -95,65 +97,12 @@ local function TeleportToGunDrop(returnBack)
     return true
 end
 
--- ========== АВТОФАРМ МОНЕТ (Coin_Server) ==========
-local CoinServerPart = nil
-local lastCoinLog = 0
-local coinLogCount = 0
-
-local function GetCoinServer()
-    if CoinServerPart and CoinServerPart.Parent then return CoinServerPart end
-    local container = workspace:FindFirstChild("CoinContainer")
-    if container then
-        CoinServerPart = container:FindFirstChild("Coin_Server") or container:FindFirstChild("CoinServer")
-        if CoinServerPart and CoinServerPart:IsA("BasePart") then return CoinServerPart end
-    end
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj.Name and (obj.Name == "Coin_Server" or obj.Name == "CoinServer") and obj:IsA("BasePart") then
-            CoinServerPart = obj
-            return CoinServerPart
-        end
-    end
-    -- Логируем редко, без спама уведомлений
-    local now = tick()
-    if now - lastCoinLog > 5 then
-        coinLogCount = 1
-        lastCoinLog = now
-        print("[Catalyst] CoinServer not found (x1)")
-    else
-        coinLogCount = coinLogCount + 1
-        if coinLogCount % 10 == 0 then
-            print("[Catalyst] CoinServer not found (x" .. coinLogCount .. ")")
-        end
-    end
-    return nil
-end
-
-local farmCooldown = false
-local function FarmCoins()
-    if farmCooldown then return end
-    local cs = GetCoinServer()
-    if not cs then return end
-    local char = LP.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    farmCooldown = true
-    local orig = hrp.CFrame
-    hrp.CFrame = cs.CFrame * CFrame.new(0, 2, 0)
-    task.wait(0.2)                -- Достаточно времени для срабатывания триггера
-    if hrp and hrp.Parent then
-        hrp.CFrame = orig
-    end
-    task.wait(0.5)
-    farmCooldown = false
-end
-
--- ========== GUI (FLUENT) ==========
+-- ========== GUI ==========
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v4.2" .. (isMobile and " [Mobile]" or ""),
+    Title = "Catalyst v5.0" .. (isMobile and " [Mobile]" or ""),
     SubTitle = "MM2",
     TabWidth = 160,
-    Size = UDim2.fromOffset(580, 500),
+    Size = UDim2.fromOffset(550, 480),
     Acrylic = false,
     Theme = "Dark"
 })
@@ -169,33 +118,16 @@ local Options = Fluent.Options
 
 -- Home
 local rankText = (_G.CatalystKeyType or "Free") .. " / " .. (_G.CatalystRank or "Standard")
-Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 4.2" })
+Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 5.0 (Light)" })
 Tabs.Home:AddButton({ Title = "Copy Discord", Callback = function() setclipboard("alchemistslimee") Fluent:Notify({ Title = "Copied" }) end })
 
 -- ========== COMBAT TAB ==========
--- Aimbot (только ПК)
-if not isMobile then
-    Tabs.Combat:AddSection("Aimbot (PC only)")
-    local aimToggle = Tabs.Combat:AddToggle("aim", { Title = "Enable Aimbot", Default = false })
-    local predToggle = Tabs.Combat:AddToggle("pred", { Title = "Prediction", Default = false })
-    local predDelay = Tabs.Combat:AddSlider("predDelay", { Title = "Prediction ms", Default = 80, Min = 0, Max = 100, Rounding = 0 })
-    local aimKey = Tabs.Combat:AddKeybind("aimKey", { Title = "Aimbot Key", Mode = "Hold", Default = "MouseRight" })
-    local fovSlider = Tabs.Combat:AddSlider("fov", { Title = "FOV Degrees", Default = 80, Min = 1, Max = 360, Rounding = 0 })
-    local fovColor = Tabs.Combat:AddColorpicker("fovColor", { Title = "FOV Color", Default = Color3.fromRGB(255,255,255) })
-end
-
--- Gun Drop Teleport
 Tabs.Combat:AddSection("Gun Drop Teleport")
 local tpBtn = Tabs.Combat:AddButton({ Title = "TP to Gun (once)", Callback = function() TeleportToGunDrop(true) end })
 local autoTP = Tabs.Combat:AddToggle("autoTP", { Title = "Auto TP every 2s", Default = false })
 cooldownPara = Tabs.Combat:AddParagraph({ Title = "Cooldown", Content = "Ready" })
 
--- Coin Farm
-Tabs.Combat:AddSection("Coin Farm")
-local farmBtn = Tabs.Combat:AddButton({ Title = "Farm Coins (once)", Callback = function() FarmCoins() end })
-local autoFarm = Tabs.Combat:AddToggle("autoFarm", { Title = "Auto Farm Coins (every 2s)", Default = false })
-
--- ========== VISUALS TAB ==========
+-- ========== VISUALS TAB (ТОЛЬКО HIGHLIGHT, БЕЗ DRAWING НА ТЕЛЕФОНЕ) ==========
 Tabs.Visuals:AddSection("Highlight ESP")
 local murHighlight = Tabs.Visuals:AddToggle("murHl", { Title = "Highlight Murderer", Default = false })
 local murColor = Tabs.Visuals:AddColorpicker("murCol", { Title = "Color", Default = Color3.fromRGB(255,0,0) })
@@ -206,6 +138,7 @@ local innocColor = Tabs.Visuals:AddColorpicker("innCol", { Title = "Color", Defa
 local gdHighlight = Tabs.Visuals:AddToggle("gdHl", { Title = "Highlight Gun", Default = false })
 local gdColor = Tabs.Visuals:AddColorpicker("gdCol", { Title = "Color", Default = Color3.fromRGB(128,0,255) })
 
+-- Name ESP только для ПК (очень лёгкое)
 if not isMobile then
     Tabs.Visuals:AddSection("Name ESP (PC only)")
     local murText = Tabs.Visuals:AddToggle("murTxt", { Title = "Murderer Names", Default = false })
@@ -255,7 +188,6 @@ local function UpdateHighlight(p)
     end
 end
 
--- Gun Drop подсветка
 local gunDropHighlight = nil
 local function UpdateGunDropHighlight()
     if gdHighlight and gdHighlight.Value then
@@ -279,7 +211,7 @@ local function UpdateGunDropHighlight()
     end
 end
 
--- Цикл обновления ролей и подсветки
+-- Цикл обновления ролей и подсветки (редко, чтобы не грузить)
 task.spawn(function()
     while true do
         task.wait(2)
@@ -290,7 +222,7 @@ task.spawn(function()
     end
 end)
 
--- Имена ESP только для ПК
+-- Имена ESP для ПК (обновляются в RenderStepped, но только если включены)
 if not isMobile then
     local nameTexts = {}
     local function ClearNameESP()
@@ -342,23 +274,26 @@ if not isMobile then
     end)
 end
 
--- ========== ДВИЖЕНИЕ ==========
+-- ========== ДВИЖЕНИЕ (ОПТИМИЗИРОВАННОЕ) ==========
 RunS.RenderStepped:Connect(function()
     local char = LP.Character
     if not char then return end
     local hum = char:FindFirstChild("Humanoid")
     local root = char:FindFirstChild("HumanoidRootPart")
     if not (hum and root) then return end
+
     if speed and speed.Value then
         hum.WalkSpeed = speedVal and speedVal.Value or 50
     else
         hum.WalkSpeed = 16
     end
+
     if noclip and noclip.Value then
         for _, part in pairs(char:GetDescendants()) do
             if part:IsA("BasePart") then part.CanCollide = false end
         end
     end
+
     if fly and fly.Value then
         if UIS:IsKeyDown(Enum.KeyCode.Space) or (isMobile and #UIS:GetTouches() > 0) then
             root.Velocity = Vector3.new(root.Velocity.X, 60, root.Velocity.Z)
@@ -377,80 +312,15 @@ UIS.JumpRequest:Connect(function()
     end
 end)
 
--- ========== АВТОМАТИЧЕСКИЕ ЦИКЛЫ (ТП и ФАРМ) ==========
+-- ========== АВТО-ТП (ПРОСТОЙ ЦИКЛ) ==========
 task.spawn(function()
     while true do
         task.wait(2)
         if autoTP and autoTP.Value then
             pcall(TeleportToGunDrop, true)
         end
-        if autoFarm and autoFarm.Value then
-            pcall(FarmCoins)
-        end
     end
 end)
-
--- ========== АИМБОТ ДЛЯ ПК ==========
-if not isMobile then
-    local function GetTarget()
-        local myRole = GetRole(LP)
-        if myRole == "Innocent" then return nil end
-        local best, bestAngle = nil, math.huge
-        local fov = Options.fov and Options.fov.Value or 80
-        local maxDist = (fov / 360) * Cam.ViewportSize.X
-        local mousePos = UIS:GetMouseLocation()
-        for _, p in pairs(Plrs:GetPlayers()) do
-            if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
-                local tRole = GetRole(p)
-                local vec, on = Cam:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
-                if on then
-                    local dist = (Vector2.new(vec.X, vec.Y) - mousePos).Magnitude
-                    if dist <= maxDist then
-                        local angle = math.deg(math.acos(math.clamp(Cam.CFrame.LookVector:Dot((p.Character.HumanoidRootPart.Position - Cam.CFrame.Position).Unit), -1, 1)))
-                        if myRole == "Murderer" and (tRole == "Sheriff" or tRole == "Innocent") and angle < bestAngle then
-                            bestAngle, best = angle, p.Character.HumanoidRootPart
-                        elseif myRole == "Sheriff" and tRole == "Murderer" and angle < bestAngle then
-                            bestAngle, best = angle, p.Character.HumanoidRootPart
-                        end
-                    end
-                end
-            end
-        end
-        return best
-    end
-
-    local fovCircle = Drawing.new("Circle")
-    fovCircle.Thickness = 1.5
-    fovCircle.NumSides = 60
-    fovCircle.Filled = false
-    fovCircle.Transparency = 1
-    RunS.RenderStepped:Connect(function()
-        if Options.aim and Options.aim.Value then
-            fovCircle.Visible = true
-            fovCircle.Radius = (Options.fov and Options.fov.Value or 80) / 360 * Cam.ViewportSize.X
-            fovCircle.Color = Options.fovColor and Options.fovColor.Value or Color3.fromRGB(255,255,255)
-            fovCircle.Position = UIS:GetMouseLocation()
-        else
-            fovCircle.Visible = false
-        end
-    end)
-
-    RunS.RenderStepped:Connect(function()
-        if not (Options.aim and Options.aim.Value) then return end
-        local press = UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or (Options.aimKey and Options.aimKey:GetState())
-        if press then
-            local target = GetTarget()
-            if target then
-                local pos = target.Position
-                if Options.pred and Options.pred.Value then
-                    local delay = (Options.predDelay and Options.predDelay.Value or 80) / 1000
-                    pos = pos + (target.Velocity * delay)
-                end
-                Cam.CFrame = CFrame.lookAt(Cam.CFrame.Position, pos)
-            end
-        end
-    end)
-end
 
 -- ========== SAVE MANAGER ==========
 SaveManager:SetLibrary(Fluent)
