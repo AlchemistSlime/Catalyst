@@ -1,5 +1,5 @@
 -- ========================================================
--- CATALYST MM2 v3.3 (FINAL WITH FLING & FIXES)
+-- CATALYST MM2 v3.4 (FIXED ANTI-FLING, FLING, GUN DROP, ROLES)
 -- ========================================================
 local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
@@ -9,7 +9,7 @@ local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
--- ========== ГЛОБАЛЬНЫЕ НАСТРОЙКИ ==========
+-- ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
 _G.CatalystKeyType = _G.CatalystKeyType or "Free"
 _G.CatalystRank = _G.CatalystRank or "Standard"
 
@@ -25,11 +25,13 @@ local function GetRole(p)
     end
     local char = p.Character
     local role = "Innocent"
+    -- Проверка по оружию в руках или рюкзаке
     if char:FindFirstChild("Knife") or (p.Backpack and p.Backpack:FindFirstChild("Knife")) or char:FindFirstChild("MurdererEffect") then
         role = "Murderer"
-    elseif char:FindFirstChild("Gun") or (p.Backpack and p.Backpack:FindFirstChild("Gun")) then
+    elseif char:FindFirstChild("Gun") or char:FindFirstChild("Revolver") or (p.Backpack and (p.Backpack:FindFirstChild("Gun") or p.Backpack:FindFirstChild("Revolver"))) then
         role = "Sheriff"
     else
+        -- Резерв: данные из RoundView
         local rd = RS:FindFirstChild("RoundView") or RS:FindFirstChild("GameStorage")
         local ur = rd and rd:FindFirstChild("RoleData") and rd.RoleData:FindFirstChild(p.Name)
         if ur then
@@ -41,21 +43,27 @@ local function GetRole(p)
     return role
 end
 
-local function UpdateRoleCache()
+local function UpdateRoleCache(forcePlayer)
     lastRoleUpdate = tick()
-    for _, p in pairs(Plrs:GetPlayers()) do
-        GetRole(p)
+    if forcePlayer then
+        -- Сбрасываем кэш для конкретного игрока
+        roleCache[forcePlayer] = nil
+        GetRole(forcePlayer)
+    else
+        for _, p in pairs(Plrs:GetPlayers()) do
+            GetRole(p)
+        end
     end
 end
 
 local function HasRevolver()
     local char = LP.Character
-    return char and char:FindFirstChild("Revolver") ~= nil
+    return char and (char:FindFirstChild("Revolver") or char:FindFirstChild("Gun")) ~= nil
 end
 
 -- ========== GUI ==========
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v3.3",
+    Title = "Catalyst v3.4",
     SubTitle = "MM2",
     TabWidth = 160,
     Size = UDim2.fromOffset(660, 580),
@@ -77,7 +85,7 @@ local Options = Fluent.Options
 local rankText = (_G.CatalystKeyType or "Free") .. " / " .. (_G.CatalystRank or "Standard")
 Tabs.Home:AddParagraph({
     Title = "Welcome to Catalyst!",
-    Content = "Rank: " .. rankText .. "\nMurder Mystery 2\nDeveloper: Alchemist Slime\nTG: @alchemistslimee\nVersion: 3.3"
+    Content = "Rank: " .. rankText .. "\nMurder Mystery 2\nDeveloper: Alchemist Slime\nTG: @alchemistslimee\nVersion: 3.4"
 })
 Tabs.Home:AddButton({
     Title = "Copy Discord Tag",
@@ -103,7 +111,7 @@ local safeTP = Tabs.Combat:AddToggle("safeTP", { Title = "Avoid Murderer within 
 local cooldownPara = Tabs.Combat:AddParagraph({ Title = "Cooldown", Content = "Ready" })
 
 Tabs.Combat:AddSection("Fling")
-local antiFling = Tabs.Combat:AddToggle("antiFling", { Title = "Anti-Fling (basic)", Default = false })
+local antiFling = Tabs.Combat:AddToggle("antiFling", { Title = "Anti-Fling (ignore small teleports)", Default = false })
 local flingAll = Tabs.Combat:AddButton({ Title = "Fling All", Callback = function() FlingPlayers("All") end })
 local flingMurder = Tabs.Combat:AddButton({ Title = "Fling Murderers", Callback = function() FlingPlayers("Murderer") end })
 local flingSheriff = Tabs.Combat:AddButton({ Title = "Fling Sheriffs", Callback = function() FlingPlayers("Sheriff") end })
@@ -161,10 +169,11 @@ local scanBtn = Tabs.Misc:AddButton({ Title = "Scan Now", Callback = function() 
 
 -- ========== ФУНКЦИИ FLING И ANTI-FLING ==========
 function FlingPlayers(targetType)
-    local blacklist = (Options.blacklist and Options.blacklist.Value) or {}
+    local blacklist = Options.blacklist or {}
+    local blackVal = blacklist.Value or {}
     local targets = {}
     for _, p in pairs(Plrs:GetPlayers()) do
-        if p ~= LP and not table.find(blacklist, p.Name) then
+        if p ~= LP and not table.find(blackVal, p.Name) then
             local role = GetRole(p)
             if targetType == "All" then
                 table.insert(targets, p)
@@ -184,7 +193,9 @@ function FlingPlayers(targetType)
         local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
             origPos[p] = hrp.CFrame
-            hrp.CFrame = hrp.CFrame * CFrame.new(0, 50, 0) -- подбросить
+            -- Подбрасываем вверх
+            hrp.CFrame = hrp.CFrame * CFrame.new(0, 50, 0)
+            hrp.Velocity = Vector3.new(math.random(-30,30), 60, math.random(-30,30)) -- добавим импульс
         end
     end
     task.wait(0.3)
@@ -198,16 +209,22 @@ function FlingPlayers(targetType)
     Fluent:Notify({ Title = "Fling", Content = #targets .. " player(s) flung", Duration = 2 })
 end
 
--- Anti-Fling
+-- Anti-Fling с игнорированием малых перемещений и временной блокировкой после респавна
 local lastPos = nil
+local lastRespawn = tick()
+LP.CharacterAdded:Connect(function() lastRespawn = tick() end)
+
 RunS.RenderStepped:Connect(function()
     if antiFling and antiFling.Value then
         local char = LP.Character
         if char and char:FindFirstChild("HumanoidRootPart") then
             local cur = char.HumanoidRootPart.Position
             if lastPos and (cur - lastPos).Magnitude > 40 then
-                char.HumanoidRootPart.CFrame = CFrame.new(lastPos)
-                Fluent:Notify({ Title = "Anti-Fling", Content = "Blocked", Duration = 1 })
+                -- Если прошло больше 2 секунд после респавна – откатываем
+                if tick() - lastRespawn > 2 then
+                    char.HumanoidRootPart.CFrame = CFrame.new(lastPos)
+                    Fluent:Notify({ Title = "Anti-Fling", Content = "Blocked large teleport", Duration = 1 })
+                end
             end
             lastPos = cur
         end
@@ -216,7 +233,7 @@ RunS.RenderStepped:Connect(function()
     end
 end)
 
--- ========== GUN DROP (исправлен: без эмодзи, плавный, тёмная обводка) ==========
+-- ========== GUN DROP (улучшенный поиск модели, тёмная обводка) ==========
 local gunDropPart = nil
 local gunDropHighlight = nil
 local gunDropText = nil
@@ -229,10 +246,16 @@ local function FindGunDrop()
     local now = tick()
     if now - lastGunSearch < 0.5 then return cachedGun end
     lastGunSearch = now
+    -- Ищем модель или часть, содержащую "gun" или "drop"
     for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and obj.Name and (obj.Name:lower():find("gun") or obj.Name:lower():find("drop")) then
-            cachedGun = obj
-            return obj
+        if obj.Name and (obj.Name:lower():find("gun") or obj.Name:lower():find("drop")) then
+            if obj:IsA("BasePart") then
+                cachedGun = obj
+                return obj
+            elseif obj:IsA("Model") and obj:FindFirstChild("PrimaryPart") then
+                cachedGun = obj.PrimaryPart
+                return cachedGun
+            end
         end
     end
     cachedGun = nil
@@ -274,7 +297,7 @@ local function UpdateGunDropVisuals()
             local pos, on = Cam:WorldToViewportPoint(gd.Position + Vector3.new(0,1.5,0))
             if on then
                 gunDropText.Position = Vector2.new(pos.X, pos.Y)
-                gunDropText.Text = "GUN DROP"  -- без эмодзи
+                gunDropText.Text = "GUN DROP"
                 gunDropText.Color = gdTxtColor and gdTxtColor.Value or Color3.fromRGB(255,255,255)
                 gunDropText.Visible = true
             else
@@ -296,17 +319,13 @@ task.spawn(function()
     end
 end)
 
--- Плавное движение текста
 RunS.RenderStepped:Connect(function()
     if gunDropText and gunDropText.Visible and gunDropPart then
         local pos, on = Cam:WorldToViewportPoint(gunDropPart.Position + Vector3.new(0,1.5,0))
-        if on then
-            gunDropText.Position = Vector2.new(pos.X, pos.Y)
-        end
+        if on then gunDropText.Position = Vector2.new(pos.X, pos.Y) end
     end
 end)
 
--- Телепорт
 function TeleportToGunDrop(returnBack)
     if tpCooldown then
         cooldownPara:SetContent("Cooldown " .. math.ceil(3 - (tick() - lastTP)) .. "s")
@@ -381,7 +400,6 @@ local function GetTarget()
     return best
 end
 
--- FOV Circle
 if (typeof(Drawing) == "table" and Drawing.new) then
     local fovCircle = Drawing.new("Circle")
     fovCircle.Thickness = 1.5
@@ -458,7 +476,6 @@ local function UpdateHighlight(p)
     end
 end
 
--- Name ESP (RenderStepped)
 RunS.RenderStepped:Connect(function()
     for _, p in pairs(Plrs:GetPlayers()) do
         if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
@@ -503,7 +520,7 @@ RunS.RenderStepped:Connect(function()
     end
 end)
 
--- Обновление ролей и подсветки
+-- Обновление ролей и подсветки (раз в 2 секунды)
 task.spawn(function()
     while true do
         task.wait(2)
@@ -540,6 +557,18 @@ sherText:OnChanged(ClearTextCache)
 sherTxtColor:OnChanged(ClearTextCache)
 innocText:OnChanged(ClearTextCache)
 innocTxtColor:OnChanged(ClearTextCache)
+
+-- Следим за поднятием Gun Drop – обновляем роль
+workspace.DescendantAdded:Connect(function(obj)
+    if obj.Name and (obj.Name:lower():find("gun") or obj.Name:lower():find("drop")) then
+        -- Задержка, чтобы инвентарь успел обновиться
+        task.wait(0.3)
+        UpdateRoleCache()
+        for _, p in pairs(Plrs:GetPlayers()) do
+            pcall(UpdateHighlight, p)
+        end
+    end
+end)
 
 -- ========== CHEATER DETECTION ==========
 function detectCheaters()
