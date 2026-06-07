@@ -1,5 +1,5 @@
 -- ========================================================
--- CATALYST MM2 v3.2 (ВСЁ РАБОТАЕТ)
+-- CATALYST MM2 v3.2 (ИСПРАВЛЕННАЯ ВЕРСИЯ)
 -- ========================================================
 local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
@@ -12,7 +12,7 @@ local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.
 -- ========== ГЛОБАЛЬНЫЕ НАСТРОЙКИ ==========
 _G.CatalystKeyType = _G.CatalystKeyType or "Free"
 _G.CatalystRank = _G.CatalystRank or "Standard"
-_G.CatalystOptions = {}  -- сюда будут сохранены все настройки из GUI
+_G.CatalystOptions = {}
 
 -- ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 local roleCache = {}
@@ -206,11 +206,11 @@ Tabs.Home:AddButton({ Title = "Copy Discord Tag", Callback = function() setclipb
 -- ========== COMBAT TAB ==========
 Tabs.Combat:AddSection("Aimbot")
 _G.CatalystOptions.aimToggle = Tabs.Combat:AddToggle("aim", { Title = "Enable Aimbot", Default = false })
-_G.CatalystOptions.predToggle = Tabs.Combat:AddToggle("pred", { Title = "Prediction", Default = false })
-_G.CatalystOptions.predSlider = Tabs.Combat:AddSlider("predDelay", { Title = "Prediction ms", Default = 80, Min = 0, Max = 100 })
-_G.CatalystOptions.fovSlider = Tabs.Combat:AddSlider("fov", { Title = "FOV Degrees", Default =80, Min = 1, Max = 360 })
+_G.CatalystOptions.predToggle = Tabs.Combat:AddToggle("pred", { Title = "Enable Prediction", Default = false })
+_G.CatalystOptions.predSlider = Tabs.Combat:AddSlider("predDelay", { Title = "Prediction ms", Default = 80, Min = 0, Max = 100, Step = 1 })
+_G.CatalystOptions.fovSlider = Tabs.Combat:AddSlider("fov", { Title = "FOV Degrees", Default = 80, Min = 1, Max = 360, Step = 1 })
 _G.CatalystOptions.fovColor = Tabs.Combat:AddColorpicker("fovColor", { Title = "FOV Color", Default = Color3.fromRGB(255, 255, 255) })
-_G.CatalystOptions.aimKey = Tabs.Combat:AddKeybind("aimKey", { Title = "Aimbot Key", Mode = "Hold", Default = "MouseRight" })
+_G.CatalystOptions.aimKey = Tabs.Combat:AddKeybind("aimKey", { Title = "Aimbot Key", Mode = "Hold", Default = "MouseButton2" })
 
 Tabs.Combat:AddSection("Gun Drop Teleport")
 _G.CatalystOptions.tpBtn = Tabs.Combat:AddButton({ Title = "TP to Gun Drop (once)", Callback = function() TeleportToGunDrop(true) end })
@@ -233,9 +233,12 @@ local function RefreshBlacklist()
     end
     _G.CatalystOptions.blacklist:SetValues(names)
 end
-RefreshBlacklist()
-Plrs.PlayerAdded:Connect(RefreshBlacklist)
-Plrs.PlayerRemoving:Connect(RefreshBlacklist)
+task.spawn(function() -- отложенная инициализация для надёжности
+    task.wait(0.2)
+    RefreshBlacklist()
+end)
+Plrs.PlayerAdded:Connect(function() task.wait(0.1); RefreshBlacklist() end)
+Plrs.PlayerRemoving:Connect(function() task.wait(0.1); RefreshBlacklist() end)
 
 -- ========== VISUALS TAB ==========
 -- Murderer
@@ -268,7 +271,7 @@ Tabs.Misc:AddSection("Movement")
 _G.CatalystOptions.noclip = Tabs.Misc:AddToggle("noclip", { Title = "No-Clip", Default = false })
 _G.CatalystOptions.fly = Tabs.Misc:AddToggle("fly", { Title = "Fly", Default = false })
 _G.CatalystOptions.speed = Tabs.Misc:AddToggle("speed", { Title = "Speedhack", Default = false })
-_G.CatalystOptions.speedVal = Tabs.Misc:AddSlider("speedVal", { Title = "Speed (walk)", Default = 50, Min = 16, Max = 250 })
+_G.CatalystOptions.speedVal = Tabs.Misc:AddSlider("speedVal", { Title = "Speed (walk)", Default = 50, Min = 16, Max = 250, Step = 1 })
 
 Tabs.Misc:AddSection("Cheater Detection")
 _G.CatalystOptions.cheatPara = Tabs.Misc:AddParagraph({ Title = "Suspicious Players", Content = "None" })
@@ -285,13 +288,11 @@ InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 SaveManager:BuildConfigSection(Tabs.Settings)
 SaveManager:LoadAutoloadConfig()
 
--- Выбор Home вкладки (исправлено)
 Window:SelectTab(Tabs.Home)
 
 -- ========== ЗАПУСК ВСЕХ ЦИКЛОВ ПОСЛЕ ИНИЦИАЛИЗАЦИИ ==========
-task.wait(0.5)  -- Даём GUI время на создание всех объектов
+task.wait(0.5)
 
--- Обновление визуалов Gun Drop
 local function UpdateGunDropVisuals()
     if HasRevolver() then
         if gunDropHighlight then gunDropHighlight:Destroy(); gunDropHighlight = nil end
@@ -309,8 +310,8 @@ local function UpdateGunDropVisuals()
                 local base = _G.CatalystOptions.gdColor and _G.CatalystOptions.gdColor.Value or Color3.fromRGB(128,0,255)
                 local h,s,v = base:ToHSV()
                 local darker = Color3.fromHSV(h, s, math.max(v * 0.8, 0))
-                gunDropHighlight.FillColor = base      -- яркий
-                gunDropHighlight.OutlineColor = darker -- тёмный
+                gunDropHighlight.FillColor = base
+                gunDropHighlight.OutlineColor = darker
                 gunDropHighlight.FillTransparency = 0.4
                 gunDropHighlight.Parent = gd
             end
@@ -319,19 +320,23 @@ local function UpdateGunDropVisuals()
         end
         if _G.CatalystOptions.gdText and _G.CatalystOptions.gdText.Value then
             if not gunDropText then
-                gunDropText = Drawing.new("Text")
-                gunDropText.Center = true
-                gunDropText.Outline = true
-                gunDropText.Size = 16
+                if Drawing and Drawing.new then
+                    gunDropText = Drawing.new("Text")
+                    gunDropText.Center = true
+                    gunDropText.Outline = true
+                    gunDropText.Size = 16
+                end
             end
-            local pos, on = Cam:WorldToViewportPoint(gd.Position + Vector3.new(0,1.5,0))
-            if on then
-                gunDropText.Position = Vector2.new(pos.X, pos.Y)
-                gunDropText.Text = "GUN DROP"
-                gunDropText.Color = _G.CatalystOptions.gdTxtColor and _G.CatalystOptions.gdTxtColor.Value or Color3.fromRGB(255,255,255)
-                gunDropText.Visible = true
-            else
-                gunDropText.Visible = false
+            if gunDropText then
+                local pos, on = Cam:WorldToViewportPoint(gd.Position + Vector3.new(0,1.5,0))
+                if on then
+                    gunDropText.Position = Vector2.new(pos.X, pos.Y)
+                    gunDropText.Text = "GUN DROP"
+                    gunDropText.Color = _G.CatalystOptions.gdTxtColor and _G.CatalystOptions.gdTxtColor.Value or Color3.fromRGB(255,255,255)
+                    gunDropText.Visible = true
+                else
+                    gunDropText.Visible = false
+                end
             end
         elseif gunDropText then
             gunDropText.Visible = false
@@ -349,7 +354,6 @@ task.spawn(function()
     end
 end)
 
--- Плавное движение текста Gun Drop
 RunS.RenderStepped:Connect(function()
     if gunDropText and gunDropText.Visible and gunDropPart then
         local pos, on = Cam:WorldToViewportPoint(gunDropPart.Position + Vector3.new(0,1.5,0))
@@ -385,7 +389,7 @@ RunS.RenderStepped:Connect(function()
     end
 end)
 
--- ========== ESP HIGHLIGHT ==========
+-- ESP HIGHLIGHT
 local function UpdateHighlight(p)
     if not p or p == LP or not p.Character then return end
     local role = GetRole(p)
@@ -442,16 +446,20 @@ RunS.RenderStepped:Connect(function()
                 if on then
                     local txt = nameTexts[p]
                     if not txt then
-                        txt = Drawing.new("Text")
-                        txt.Center = true
-                        txt.Outline = true
-                        txt.Size = 14
-                        nameTexts[p] = txt
+                        if Drawing and Drawing.new then
+                            txt = Drawing.new("Text")
+                            txt.Center = true
+                            txt.Outline = true
+                            txt.Size = 14
+                            nameTexts[p] = txt
+                        end
                     end
-                    txt.Text = p.Name .. " (" .. role .. ")"
-                    txt.Position = Vector2.new(vec.X, vec.Y)
-                    txt.Color = color
-                    txt.Visible = true
+                    if txt then
+                        txt.Text = p.Name .. " (" .. role .. ")"
+                        txt.Position = Vector2.new(vec.X, vec.Y)
+                        txt.Color = color
+                        txt.Visible = true
+                    end
                 elseif nameTexts[p] then
                     nameTexts[p].Visible = false
                 end
@@ -464,7 +472,6 @@ RunS.RenderStepped:Connect(function()
     end
 end)
 
--- Обновление ролей и подсветки
 task.spawn(function()
     while true do
         task.wait(2)
@@ -492,7 +499,7 @@ _G.CatalystOptions.sherColor:OnChanged(RefreshHighlights)
 _G.CatalystOptions.innocHighlight:OnChanged(RefreshHighlights)
 _G.CatalystOptions.innocColor:OnChanged(RefreshHighlights)
 
--- ========== AIMBOT (с предсказанием) ==========
+-- AIMBOT
 local function GetTarget()
     local myRole = GetRole(LP)
     if myRole == "Innocent" then return nil end
@@ -520,9 +527,8 @@ local function GetTarget()
     return best
 end
 
--- FOV Circle
 local fovCircle = nil
-if (typeof(Drawing) == "table" and Drawing.new) then
+if Drawing and Drawing.new then
     fovCircle = Drawing.new("Circle")
     fovCircle.Thickness = 1.5
     fovCircle.NumSides = 60
@@ -558,7 +564,7 @@ RunS.RenderStepped:Connect(function()
     end
 end)
 
--- ========== MISC: NOCLIP, FLY, SPEED ==========
+-- NOCLIP, FLY, SPEED
 RunS.RenderStepped:Connect(function()
     local char = LP.Character
     if not char then return end
@@ -593,7 +599,7 @@ UIS.JumpRequest:Connect(function()
     end
 end)
 
--- ========== AUTO CHEAT SCAN ==========
+-- AUTO CHEAT SCAN
 task.spawn(function()
     while true do
         task.wait(5)
