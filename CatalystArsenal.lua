@@ -42,10 +42,10 @@ Tabs.Home:AddParagraph({
     Content = "Rank: " .. rankText .. "\nGame: Arsenal\nDeveloper: Alchemist Slime\nTG: @alchemistslimee\nVersion 2.3.0"
 })
 Tabs.Home:AddButton({
-    Title = "📋 Copy Discord Tag",
+    Title = "Copy Discord",
     Callback = function()
-        setclipboard("alchemistslimee")
-        Fluent:Notify({ Title = "Copied!", Content = "Discord tag: alchemistslimee", Duration = 2 })
+        setclipboard("https://discord.gg/w9mfcck2zV")
+        Fluent:Notify({ Title = "Copied!", Content = "Copied to clipboard.", Duration = 2 })
     end
 })
 Tabs.Home:AddSection("Changelog")
