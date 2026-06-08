@@ -117,7 +117,7 @@ local Options = Fluent.Options
 -- Home
 local rankText = (_G.CatalystKeyType or "Free") .. " / " .. (_G.CatalystRank or "Standard")
 Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 5.1" })
-Tabs.Home:AddButton({ Title = "Copy Discord", Callback = function() setclipboard("alchemistslimee") Fluent:Notify({ Title = "Copied" }) end })
+Tabs.Home:AddButton({ Title = "Copy Discord", Callback = function() setclipboard("https://discord.gg/w9mfcck2zV") Fluent:Notify({ Title = "Copied" }) end })
 
 -- ========== COMBAT TAB ==========
 if not isMobile then
