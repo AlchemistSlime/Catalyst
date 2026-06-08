@@ -21,7 +21,7 @@ local Window = Fluent:CreateWindow({
     MinimizeKey = Enum.KeyCode.LeftAlt
 })
 
--- ========== ВКЛАДКА HOME (ПЕРВАЯ) ==========
+-- ========== ВКЛАДКИ ==========
 local Tabs = {
     Home = Window:AddTab({ Title = "Home", Icon = "home" }),
     Main = Window:AddTab({ Title = "Combat", Icon = "crosshair" }),
@@ -51,31 +51,38 @@ Tabs.Home:AddButton({
 Tabs.Home:AddSection("Changelog")
 Tabs.Home:AddParagraph({
     Title = "Latest Changes",
-    Content = "• Added Home tab\n• Mobile Aim Assist toggle\n• Fixed Fly for mobile\n• Improved ESP performance"
+    Content = "• Added Home tab\n• Mobile Aim Assist toggle\n• Fixed Fly for mobile\n• Improved ESP performance\n• Fixed Drawing errors"
 })
 
 -- ========================================================
--- ОСТАЛЬНОЙ КОД (БЕЗ ИЗМЕНЕНИЙ, КРОМЕ ПЕРЕМЕЩЕНИЯ ТАБОВ)
+-- FOV Circle (с проверкой на поддержку Drawing)
 -- ========================================================
--- FOV Circle
 local IsExec = (typeof(Drawing) == "table" and Drawing.new ~= nil)
 local FOV = nil
 if IsExec then
     FOV = Drawing.new("Circle")
     FOV.Thickness, FOV.NumSides, FOV.Filled, FOV.Transparency = 1.5, 60, false, 1
-    RunS.RenderStepped:Connect(function()
-        if Options.Slider and Options.Colorpicker2 and Options.MyToggle then
-            local isHitbox = Options.Dropdown and Options.Dropdown.Value == "Hitbox Increase"
+end
+
+RunS.RenderStepped:Connect(function()
+    if Options.Slider and Options.Colorpicker2 and Options.MyToggle then
+        local isHitbox = Options.Dropdown and Options.Dropdown.Value == "Hitbox Increase"
+        if FOV then
             FOV.Visible = Options.MyToggle.Value and not isHitbox
             FOV.Radius = (Options.Slider.Value / 360) * Cam.ViewportSize.X
             FOV.Color = Options.Colorpicker2.Value
             FOV.Position = UIS:GetMouseLocation()
-        else
-            if FOV then FOV.Visible = false end
         end
-    end)
-end
+    else
+        if FOV then
+            FOV.Visible = false
+        end
+    end
+end)
 
+-- ========================================================
+-- Вспомогательные функции
+-- ========================================================
 local function IsEnemy(char)
     local p = Plrs:GetPlayerFromCharacter(char)
     if p and p ~= LP then
@@ -116,7 +123,9 @@ local function GetTarget()
     return best or fallbackTarget
 end
 
+-- ========================================================
 -- Aimbot (ПК + мобильный режим)
+-- ========================================================
 local function ShouldAim()
     if not (Options.MyToggle and Options.MyToggle.Value) then return false end
     local mode = Options.Dropdown and Options.Dropdown.Value or "AimAssist"
@@ -141,7 +150,9 @@ RunS.RenderStepped:Connect(function()
     end
 end)
 
+-- ========================================================
 -- Hitbox Increase
+-- ========================================================
 RunS.RenderStepped:Connect(function()
     if not (Options.MyToggle and Options.MyToggle.Value) then return end
     local mode = Options.Dropdown and Options.Dropdown.Value or "AimAssist"
@@ -161,7 +172,9 @@ RunS.RenderStepped:Connect(function()
     end
 end)
 
+-- ========================================================
 -- ESP
+-- ========================================================
 local function ClearESP()
     for _, p in pairs(Plrs:GetPlayers()) do
         local h = p.Character and p.Character:FindFirstChild("Catalyst_Highlight")
@@ -175,7 +188,7 @@ local function CreateESP(char)
     if not IsEnemy(char) then return end
     local h = char:FindFirstChild("Catalyst_Highlight") or Instance.new("Highlight")
     h.Name = "Catalyst_Highlight"
-    h.FillColor = Options.Colorpicker.Value
+    h.FillColor = Options.Colorpicker and Options.Colorpicker.Value or Color3.fromRGB(255, 0, 0)
     h.OutlineColor = Color3.fromRGB(255, 255, 255)
     h.FillTransparency = 0.5
     h.OutlineTransparency = 0
@@ -206,7 +219,9 @@ for _, p in pairs(Plrs:GetPlayers()) do BindTeamChange(p) end
 Plrs.PlayerAdded:Connect(BindTeamChange)
 Plrs.PlayerRemoving:Connect(function() task.spawn(RefreshESP) end)
 
+-- ========================================================
 -- Speedhack
+-- ========================================================
 RunS.RenderStepped:Connect(function()
     local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
     if hum and Options.Speedhack and Options.Speedhack.Value then
@@ -214,7 +229,9 @@ RunS.RenderStepped:Connect(function()
     end
 end)
 
+-- ========================================================
 -- Infinite Jump
+-- ========================================================
 UIS.JumpRequest:Connect(function()
     if Options.InfJump and Options.InfJump.Value and LP.Character then
         local hum = LP.Character:FindFirstChildOfClass("Humanoid")
@@ -222,7 +239,9 @@ UIS.JumpRequest:Connect(function()
     end
 end)
 
+-- ========================================================
 -- Fly
+-- ========================================================
 local flyEnabled = false
 local flyBodyVel = nil
 local function ToggleFly()
@@ -275,7 +294,7 @@ LP.CharacterAdded:Connect(function()
 end)
 
 -- ========================================================
--- ПОСТРОЕНИЕ UI (ВКЛАДКИ, КРОМЕ HOME, УЖЕ СОЗДАНЫ)
+-- ПОСТРОЕНИЕ UI
 -- ========================================================
 -- Combat Tab (Main)
 Tabs.Main:AddSection("Aimbot Settings")
@@ -306,7 +325,7 @@ espColor:OnChanged(RefreshESP)
 -- Misc Tab
 Tabs.Misc:AddSection("Movement Hacks")
 local speedToggle = Tabs.Misc:AddToggle("Speedhack", { Title = "Enable Speedhack", Default = false })
-local speedSlider = Tabs.Misc:AddSlider("SpeedSlider", { Title = "WalkSpeed Value", Default = 100, Min = 16, Max = 250, Rounding = 0 })
+local speedSlider = Tabs.Misc:AddSlider("SpeedSlider", { Title = "WalkSpeed Value", Default =100, Min = 16, Max = 250, Rounding = 0 })
 local infJump = Tabs.Misc:AddToggle("InfJump", { Title = "Infinite Jump", Default = false })
 local flyToggle = Tabs.Misc:AddToggle("FlyToggle", { Title = "Fly (Hold Jump / Touch)", Default = false })
 
@@ -320,7 +339,7 @@ InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 SaveManager:BuildConfigSection(Tabs.Settings)
 SaveManager:LoadAutoloadConfig()
 
--- Выбираем вкладку Home (индекс 1)
+-- Выбираем вкладку Home
 Window:SelectTab(Tabs.Home)
 
 -- Периодическое обновление ESP
