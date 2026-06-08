@@ -97,7 +97,7 @@ end
 
 -- ========== GUI ==========
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v5.1" .. (isMobile and " [Mobile]" or ""),
+    Title = "Catalyst v5.1.0" .. (isMobile and " [Mobile]" or ""),
     SubTitle = "MM2",
     TabWidth = 160,
     Size = UDim2.fromOffset(550, 500),
