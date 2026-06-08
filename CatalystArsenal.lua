@@ -21,7 +21,9 @@ local Window = Fluent:CreateWindow({
     MinimizeKey = Enum.KeyCode.LeftAlt
 })
 
+-- ========== ВКЛАДКА HOME (ПЕРВАЯ) ==========
 local Tabs = {
+    Home = Window:AddTab({ Title = "Home", Icon = "home" }),
     Main = Window:AddTab({ Title = "Combat", Icon = "crosshair" }),
     Visuals = Window:AddTab({ Title = "Visuals", Icon = "eye" }),
     Misc = Window:AddTab({ Title = "Misc", Icon = "menu" }),
@@ -30,9 +32,32 @@ local Tabs = {
 
 local Options = Fluent.Options
 
+-- Информация о ранге (глобальные переменные могут быть заданы из хаба)
+_G.CatalystKeyType = _G.CatalystKeyType or "Free"
+_G.CatalystRank = _G.CatalystRank or "Standard"
+local rankText = (_G.CatalystKeyType or "Free") .. " / " .. (_G.CatalystRank or "Standard")
+
+Tabs.Home:AddParagraph({
+    Title = "Welcome to Catalyst!",
+    Content = "Rank: " .. rankText .. "\nGame: Arsenal\nDeveloper: Alchemist Slime\nTG: @alchemistslimee\nVersion 2.3.0"
+})
+Tabs.Home:AddButton({
+    Title = "📋 Copy Discord Tag",
+    Callback = function()
+        setclipboard("alchemistslimee")
+        Fluent:Notify({ Title = "Copied!", Content = "Discord tag: alchemistslimee", Duration = 2 })
+    end
+})
+Tabs.Home:AddSection("Changelog")
+Tabs.Home:AddParagraph({
+    Title = "Latest Changes",
+    Content = "• Added Home tab\n• Mobile Aim Assist toggle\n• Fixed Fly for mobile\n• Improved ESP performance"
+})
+
 -- ========================================================
--- FOV Circle (только для ПК / при включённом AimAssist)
+-- ОСТАЛЬНОЙ КОД (БЕЗ ИЗМЕНЕНИЙ, КРОМЕ ПЕРЕМЕЩЕНИЯ ТАБОВ)
 -- ========================================================
+-- FOV Circle
 local IsExec = (typeof(Drawing) == "table" and Drawing.new ~= nil)
 local FOV = nil
 if IsExec then
@@ -51,9 +76,6 @@ if IsExec then
     end)
 end
 
--- ========================================================
--- Вспомогательные функции
--- ========================================================
 local function IsEnemy(char)
     local p = Plrs:GetPlayerFromCharacter(char)
     if p and p ~= LP then
@@ -94,23 +116,19 @@ local function GetTarget()
     return best or fallbackTarget
 end
 
--- ========================================================
--- Aimbot (для ПК – по клавише, для мобильных – всегда вкл или по тоглу)
--- ========================================================
+-- Aimbot (ПК + мобильный режим)
 local function ShouldAim()
     if not (Options.MyToggle and Options.MyToggle.Value) then return false end
     local mode = Options.Dropdown and Options.Dropdown.Value or "AimAssist"
     if mode ~= "AimAssist" then return false end
 
     if isMobile then
-        -- На телефоне: либо всегда активно (если включён Mobile Aim Assist), либо по касанию экрана
         if Options.MobileAim and Options.MobileAim.Value then
             return true
         else
             return UIS:IsTouchEnabled and #UIS:GetTouches() > 0
         end
     else
-        -- На ПК: по зажатой клавише (правый клик)
         return Options.Keybind and Options.Keybind:GetState()
     end
 end
@@ -123,7 +141,7 @@ RunS.RenderStepped:Connect(function()
     end
 end)
 
--- Hitbox Increase (увеличение хитбоксов)
+-- Hitbox Increase
 RunS.RenderStepped:Connect(function()
     if not (Options.MyToggle and Options.MyToggle.Value) then return end
     local mode = Options.Dropdown and Options.Dropdown.Value or "AimAssist"
@@ -143,9 +161,7 @@ RunS.RenderStepped:Connect(function()
     end
 end)
 
--- ========================================================
--- ESP (только Highlight)
--- ========================================================
+-- ESP
 local function ClearESP()
     for _, p in pairs(Plrs:GetPlayers()) do
         local h = p.Character and p.Character:FindFirstChild("Catalyst_Highlight")
@@ -175,7 +191,6 @@ local function RefreshESP()
     end
 end
 
--- Слежка за сменой команды и появлением персонажа
 local function BindTeamChange(p)
     p:GetPropertyChangedSignal("Team"):Connect(RefreshESP)
     p.CharacterAdded:Connect(function(c)
@@ -191,9 +206,6 @@ for _, p in pairs(Plrs:GetPlayers()) do BindTeamChange(p) end
 Plrs.PlayerAdded:Connect(BindTeamChange)
 Plrs.PlayerRemoving:Connect(function() task.spawn(RefreshESP) end)
 
--- ========================================================
--- Движение: Speedhack, Infinite Jump, Fly
--- ========================================================
 -- Speedhack
 RunS.RenderStepped:Connect(function()
     local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
@@ -210,7 +222,7 @@ UIS.JumpRequest:Connect(function()
     end
 end)
 
--- Fly (BodyVelocity)
+-- Fly
 local flyEnabled = false
 local flyBodyVel = nil
 local function ToggleFly()
@@ -229,7 +241,6 @@ local function ToggleFly()
     end
 end
 
--- Fly управление (зажатие прыжка)
 RunS.RenderStepped:Connect(function()
     if not (Options.FlyToggle and Options.FlyToggle.Value) then
         if flyEnabled then ToggleFly() end
@@ -250,11 +261,7 @@ RunS.RenderStepped:Connect(function()
     local up = 0
     local down = 0
     if isMobile then
-        -- На мобилках: полёт активен при касании экрана (любой тач)
-        if #UIS:GetTouches() > 0 then
-            up = 60
-        end
-        -- Для снижения можно добавить отдельную кнопку, но для простоты используем Shift на ПК
+        if #UIS:GetTouches() > 0 then up = 60 end
     else
         if UIS:IsKeyDown(Enum.KeyCode.Space) then up = 60 end
         if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then down = -60 end
@@ -262,16 +269,15 @@ RunS.RenderStepped:Connect(function()
     flyBodyVel.Velocity = Vector3.new(root.Velocity.X, up + down, root.Velocity.Z)
 end)
 
--- Остановка полёта при выключении тогла или смерти
 LP.CharacterAdded:Connect(function()
     if flyBodyVel then flyBodyVel:Destroy(); flyBodyVel = nil end
     flyEnabled = false
 end)
 
 -- ========================================================
--- ПОСТРОЕНИЕ UI
+-- ПОСТРОЕНИЕ UI (ВКЛАДКИ, КРОМЕ HOME, УЖЕ СОЗДАНЫ)
 -- ========================================================
--- Combat
+-- Combat Tab (Main)
 Tabs.Main:AddSection("Aimbot Settings")
 local Toggle = Tabs.Main:AddToggle("MyToggle", { Title = "Enable Aimbot", Default = false })
 local Dropdown = Tabs.Main:AddDropdown("Dropdown", {
@@ -290,24 +296,21 @@ if isMobile then
     Tabs.Main:AddParagraph({ Title = "Tip", Content = "When disabled, aim works on touch." })
 end
 
--- Visuals
+-- Visuals Tab
 Tabs.Visuals:AddSection("Visual Settings")
 local espToggle = Tabs.Visuals:AddToggle("ESP Toggle", { Title = "Enable ESP (Team Checks)", Default = false })
 local espColor = Tabs.Visuals:AddColorpicker("Colorpicker", { Title = "Enemy ESP Color", Default = Color3.fromRGB(255, 0, 0) })
-
 espToggle:OnChanged(RefreshESP)
 espColor:OnChanged(RefreshESP)
 
--- Misc
+-- Misc Tab
 Tabs.Misc:AddSection("Movement Hacks")
 local speedToggle = Tabs.Misc:AddToggle("Speedhack", { Title = "Enable Speedhack", Default = false })
 local speedSlider = Tabs.Misc:AddSlider("SpeedSlider", { Title = "WalkSpeed Value", Default = 100, Min = 16, Max = 250, Rounding = 0 })
 local infJump = Tabs.Misc:AddToggle("InfJump", { Title = "Infinite Jump", Default = false })
 local flyToggle = Tabs.Misc:AddToggle("FlyToggle", { Title = "Fly (Hold Jump / Touch)", Default = false })
 
--- ========================================================
--- Сохранение настроек
--- ========================================================
+-- Settings Tab (SaveManager)
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
@@ -317,7 +320,8 @@ InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 SaveManager:BuildConfigSection(Tabs.Settings)
 SaveManager:LoadAutoloadConfig()
 
-Window:SelectTab(1)
+-- Выбираем вкладку Home (индекс 1)
+Window:SelectTab(Tabs.Home)
 
 -- Периодическое обновление ESP
 while task.wait(120) do
