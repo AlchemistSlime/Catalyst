@@ -1,5 +1,3 @@
-
-
 local UIS = game:GetService("UserInputService")
 local isMobile = UIS.TouchEnabled and not UIS.MouseEnabled
 
@@ -42,6 +40,7 @@ local mobileAimLock = false
 local wallCheck = true
 local hitboxIncrease = false
 local hitboxSize = 13
+local maxDistance = 150  -- new
 
 local keybind = "MouseRight"
 local fovDeg = 90
@@ -86,7 +85,7 @@ local function IsVisible(part)
     return not result or result.Instance:IsDescendantOf(part.Parent)
 end
 
--- ========== AIM V2 (LERP) ==========
+-- ========== AIM (LERP) ==========
 local function GetTarget()
     local bestPart, bestAngle = nil, fovDeg
     local cameraPos = Camera.CFrame.Position
@@ -98,6 +97,8 @@ local function GetTarget()
                 local part = char:FindFirstChild(aimPart)
                 local hum = char:FindFirstChildOfClass("Humanoid")
                 if part and hum and hum.Health > 0 then
+                    local distance = (part.Position - cameraPos).Magnitude
+                    if distance > maxDistance then continue end  -- distance check
                     local dir = (part.Position - cameraPos).Unit
                     local angle = math.deg(math.acos(math.clamp(cameraLook:Dot(dir), -1, 1)))
                     if angle <= bestAngle then
@@ -152,7 +153,7 @@ if not isMobile then
     end)
 end
 
--- ========== HITBOX INCREASE (adjustable size) ==========
+-- ========== HITBOX INCREASE ==========
 task.spawn(function()
     while true do
         task.wait(0.2)
@@ -303,6 +304,9 @@ CombatTab:AddSlider("FOV", {Title = "FOV (degrees)", Default = 90, Min = 10, Max
 CombatTab:AddSlider("Smoothness", {Title = "Smoothness", Default = 0.07, Min = 0.01, Max = 0.2, Rounding = 3})
     :OnChanged(function(v) smoothness = v end)
 
+CombatTab:AddSlider("MaxDistance", {Title = "Max Distance (studs)", Default = 150, Min = 10, Max = 500, Rounding = 0})
+    :OnChanged(function(v) maxDistance = v end)
+
 local aimPartDropdown = CombatTab:AddDropdown("AimPart", {
     Title = "Aim Part",
     Values = {"Head", "HumanoidRootPart", "Torso"},
@@ -386,5 +390,11 @@ SaveManager:LoadAutoloadConfig()
 -- Start aim
 startAim()
 
--- Open Home tab
+
 Window:SelectTab(HomeTab)
+-- Load notification
+Fluent:Notify({
+    Title = "Join our community!",
+    Content = "Found bugs, want to improve the script, buy Premium, or just chat? Join our Discord! Link in Home tab.",
+    Duration = 8
+})
