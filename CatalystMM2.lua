@@ -54,10 +54,9 @@ end
 
 -- ========== ПОИСК GUN DROP ==========
 local function FindGunDrop()
-    for _, obj in ipairs(workspace:GetChildren()) do
-        if obj:IsA("Tool") and (obj.Name == "Gun" or obj.Name == "Revolver") then
-            local part = obj:FindFirstChild("Handle") or obj:FindFirstChildWhichIsA("BasePart")
-            if part then return part end
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and obj.Name:lower():match("GunDrop") then
+            return obj
         end
     end
     return nil
