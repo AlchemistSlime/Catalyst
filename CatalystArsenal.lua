@@ -1,18 +1,26 @@
-local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
-local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
+--[[
+    Catalyst Hub | Arsenal
+    Version 3.3.0 (Final)
+    - One aim mode: V2 Lerp (smooth, no jitter)
+    - Hitbox Increase with adjustable size (HeadHB + HumanoidRootPart)
+    - WallCheck, TeamCheck, FOV circle, ESP, Speed, InfJump
+    - Mobile support (Aim Lock)
+]]
 
--- Определяем мобильное устройство
+local UIS = game:GetService("UserInputService")
 local isMobile = UIS.TouchEnabled and not UIS.MouseEnabled
 
--- Загрузка библиотек
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
-_G.HighlightAll, _G.FocusNPCHead = false, false
+-- Rank system (optional)
+_G.CatalystKeyType = _G.CatalystKeyType or "Free"
+_G.CatalystRank = _G.CatalystRank or "Standard"
+local rankText = (_G.CatalystKeyType or "Free") .. " / " .. (_G.CatalystRank or "Standard")
 
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v2.3.0" .. (isMobile and " [Mobile]" or ""),
+    Title = "Catalyst v3.3.0" .. (isMobile and " [Mobile]" or ""),
     SubTitle = "Arsenal",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 520),
@@ -21,328 +29,369 @@ local Window = Fluent:CreateWindow({
     MinimizeKey = Enum.KeyCode.LeftAlt
 })
 
--- ========== ВКЛАДКИ ==========
-local Tabs = {
-    Home = Window:AddTab({ Title = "Home", Icon = "home" }),
-    Main = Window:AddTab({ Title = "Combat", Icon = "crosshair" }),
-    Visuals = Window:AddTab({ Title = "Visuals", Icon = "eye" }),
-    Misc = Window:AddTab({ Title = "Misc", Icon = "menu" }),
-    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
-}
+-- Tabs
+local HomeTab = Window:AddTab({ Title = "Home", Icon = "home" })
+local CombatTab = Window:AddTab({ Title = "Combat", Icon = "crosshair" })
+local MovementTab = Window:AddTab({ Title = "Movement", Icon = "" })
+local VisualsTab = Window:AddTab({ Title = "Visuals", Icon = "eye" })
+local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "settings" })
 
-local Options = Fluent.Options
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local LP = Players.LocalPlayer
 
--- Информация о ранге (глобальные переменные могут быть заданы из хаба)
-_G.CatalystKeyType = _G.CatalystKeyType or "Free"
-_G.CatalystRank = _G.CatalystRank or "Standard"
-local rankText = (_G.CatalystKeyType or "Free") .. " / " .. (_G.CatalystRank or "Standard")
+-- ========== SETTINGS ==========
+local aimEnabled = false
+local holding = false
+local mobileAimLock = false
+local wallCheck = true
+local hitboxIncrease = false
+local hitboxSize = 13
 
-Tabs.Home:AddParagraph({
-    Title = "Welcome to Catalyst!",
-    Content = "Rank: " .. rankText .. "\nGame: Arsenal\nDeveloper: Alchemist Slime\nTG: @alchemistslimee\nVersion 2.3.0"
-})
-Tabs.Home:AddButton({
-    Title = "Copy Discord",
-    Callback = function()
-        setclipboard("https://discord.gg/w9mfcck2zV")
-        Fluent:Notify({ Title = "Copied!", Content = "Copied to clipboard.", Duration = 2 })
-    end
-})
-Tabs.Home:AddSection("Changelog")
-Tabs.Home:AddParagraph({
-    Title = "Latest Changes",
-    Content = "• Added Home tab\n• Mobile Aim Assist toggle\n• Fixed Fly for mobile\n• Improved ESP performance\n• Fixed Drawing errors"
-})
+local keybind = "MouseRight"
+local fovDeg = 90
+local smoothness = 0.07
+local aimPart = "Head"
+local teamCheck = true
 
--- ========================================================
--- FOV Circle (с проверкой на поддержку Drawing)
--- ========================================================
-local IsExec = (typeof(Drawing) == "table" and Drawing.new ~= nil)
-local FOV = nil
-if IsExec then
-    FOV = Drawing.new("Circle")
-    FOV.Thickness, FOV.NumSides, FOV.Filled, FOV.Transparency = 1.5, 60, false, 1
-end
+-- Weapon mods
+local fireRateEnabled = false
+local recoilEnabled = false
 
-RunS.RenderStepped:Connect(function()
-    if Options.Slider and Options.Colorpicker2 and Options.MyToggle then
-        local isHitbox = Options.Dropdown and Options.Dropdown.Value == "Hitbox Increase"
-        if FOV then
-            FOV.Visible = Options.MyToggle.Value and not isHitbox
-            FOV.Radius = (Options.Slider.Value / 360) * Cam.ViewportSize.X
-            FOV.Color = Options.Colorpicker2.Value
-            FOV.Position = UIS:GetMouseLocation()
-        end
+-- Movement
+local speedEnabled = false
+local speedValue = 100
+local infJumpEnabled = false
+
+-- Visuals
+local espEnabled = false
+local espColor = Color3.fromRGB(255,0,0)
+local fovCircleEnabled = true
+local fovCircleColor = Color3.fromRGB(255,255,255)
+
+-- ========== HELPERS ==========
+local function IsEnemy(plr)
+    if plr == LP then return false end
+    if not plr.Character then return false end
+    if teamCheck then
+        return plr.Team ~= LP.Team
     else
-        if FOV then
-            FOV.Visible = false
-        end
-    end
-end)
-
--- ========================================================
--- Вспомогательные функции
--- ========================================================
-local function IsEnemy(char)
-    local p = Plrs:GetPlayerFromCharacter(char)
-    if p and p ~= LP then
-        if LP.Team ~= "" and p.Team ~= "" and LP.Team == p.Team then return false end
         return true
     end
-    return _G.HighlightAll
 end
 
 local function IsVisible(part)
-    local origin = Cam.CFrame.Position
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-    raycastParams.FilterDescendantsInstances = {LP.Character, Cam}
-    local result = workspace:Raycast(origin, part.Position - origin, raycastParams)
+    if not wallCheck then return true end
+    local origin = Camera.CFrame.Position
+    local direction = (part.Position - origin).Unit
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = {LP.Character, Camera}
+    local result = workspace:Raycast(origin, direction * (part.Position - origin).Magnitude, rayParams)
     return not result or result.Instance:IsDescendantOf(part.Parent)
 end
 
+-- ========== AIM V2 (LERP) ==========
 local function GetTarget()
-    local best, minAngle = nil, math.huge
-    local fallbackTarget, fallbackMinAngle = nil, math.huge
-    local maxAngle = (Options.Slider and Options.Slider.Value or 180)
-
-    for _, p in pairs(Plrs:GetPlayers()) do
-        if p ~= LP and p.Character and p.Character:FindFirstChild("Head") and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
-            if IsEnemy(p.Character) then
-                local angle = math.deg(math.acos(math.clamp(Cam.CFrame.LookVector:Dot((p.Character.Head.Position - Cam.CFrame.Position).Unit), -1, 1)))
-                if maxAngle >= 360 or angle <= maxAngle / 2 then
-                    if IsVisible(p.Character.Head) then
-                        if angle < minAngle then minAngle, best = angle, p.Character.Head end
-                    else
-                        if angle < fallbackMinAngle then fallbackMinAngle, fallbackTarget = angle, p.Character.Head end
+    local bestPart, bestAngle = nil, fovDeg
+    local cameraPos = Camera.CFrame.Position
+    local cameraLook = Camera.CFrame.LookVector
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if IsEnemy(plr) then
+            local char = plr.Character
+            if char then
+                local part = char:FindFirstChild(aimPart)
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if part and hum and hum.Health > 0 then
+                    local dir = (part.Position - cameraPos).Unit
+                    local angle = math.deg(math.acos(math.clamp(cameraLook:Dot(dir), -1, 1)))
+                    if angle <= bestAngle then
+                        if IsVisible(part) then
+                            bestAngle = angle
+                            bestPart = part
+                        end
                     end
                 end
             end
         end
     end
-    return best or fallbackTarget
+    return bestPart
 end
 
--- ========================================================
--- Aimbot (ПК + мобильный режим)
--- ========================================================
-local function ShouldAim()
-    if not (Options.MyToggle and Options.MyToggle.Value) then return false end
-    local mode = Options.Dropdown and Options.Dropdown.Value or "AimAssist"
-    if mode ~= "AimAssist" then return false end
-
-    if isMobile then
-        if Options.MobileAim and Options.MobileAim.Value then
-            return true
+local currentCF = Camera.CFrame
+local aimConnection = nil
+local function startAim()
+    if aimConnection then aimConnection:Disconnect() end
+    aimConnection = RunService.RenderStepped:Connect(function(dt)
+        if not aimEnabled then
+            currentCF = Camera.CFrame
+            return
+        end
+        local active = false
+        if isMobile then active = mobileAimLock else active = holding end
+        if active then
+            local target = GetTarget()
+            if target then
+                local targetCF = CFrame.new(Camera.CFrame.Position, target.Position)
+                local alpha = math.clamp(smoothness / dt, 0, 1)
+                currentCF = currentCF:Lerp(targetCF, alpha)
+                Camera.CFrame = currentCF
+            else
+                currentCF = Camera.CFrame
+            end
         else
-            return UIS:IsTouchEnabled and #UIS:GetTouches() > 0
-        end
-    else
-        return Options.Keybind and Options.Keybind:GetState()
-    end
-end
-
-RunS.RenderStepped:Connect(function()
-    if not ShouldAim() then return end
-    local target = GetTarget()
-    if target and IsVisible(target) then
-        Cam.CFrame = Cam.CFrame:Lerp(CFrame.lookAt(Cam.CFrame.Position, target.Position), 0.4)
-    end
-end)
-
--- ========================================================
--- Hitbox Increase
--- ========================================================
-RunS.RenderStepped:Connect(function()
-    if not (Options.MyToggle and Options.MyToggle.Value) then return end
-    local mode = Options.Dropdown and Options.Dropdown.Value or "AimAssist"
-    if mode == "Hitbox Increase" then
-        for _, p in pairs(Plrs:GetPlayers()) do
-            if p ~= LP and p.Character and IsEnemy(p.Character) then
-                for _, name in pairs({"HeadHB", "HumanoidRootPart"}) do
-                    local part = p.Character:FindFirstChild(name)
-                    if part then
-                        part.CanCollide = false
-                        part.Transparency = 1
-                        part.Size = Vector3.new(13, 13, 13)
-                    end
-                end
-            end
-        end
-    end
-end)
-
--- ========================================================
--- ESP
--- ========================================================
-local function ClearESP()
-    for _, p in pairs(Plrs:GetPlayers()) do
-        local h = p.Character and p.Character:FindFirstChild("Catalyst_Highlight")
-        if h then h:Destroy() end
-    end
-end
-
-local function CreateESP(char)
-    if not char or not char:IsA("Model") or char == LP.Character then return end
-    if not (Options["ESP Toggle"] and Options["ESP Toggle"].Value) then return end
-    if not IsEnemy(char) then return end
-    local h = char:FindFirstChild("Catalyst_Highlight") or Instance.new("Highlight")
-    h.Name = "Catalyst_Highlight"
-    h.FillColor = Options.Colorpicker and Options.Colorpicker.Value or Color3.fromRGB(255, 0, 0)
-    h.OutlineColor = Color3.fromRGB(255, 255, 255)
-    h.FillTransparency = 0.5
-    h.OutlineTransparency = 0
-    h.Parent = char
-end
-
-local function RefreshESP()
-    ClearESP()
-    if Options["ESP Toggle"] and Options["ESP Toggle"].Value then
-        for _, p in pairs(Plrs:GetPlayers()) do
-            if p.Character then CreateESP(p.Character) end
-        end
-    end
-end
-
-local function BindTeamChange(p)
-    p:GetPropertyChangedSignal("Team"):Connect(RefreshESP)
-    p.CharacterAdded:Connect(function(c)
-        task.wait(0.5)
-        if IsEnemy(c) then CreateESP(c) else
-            local h = c:FindFirstChild("Catalyst_Highlight")
-            if h then h:Destroy() end
+            currentCF = Camera.CFrame
         end
     end)
 end
 
-for _, p in pairs(Plrs:GetPlayers()) do BindTeamChange(p) end
-Plrs.PlayerAdded:Connect(BindTeamChange)
-Plrs.PlayerRemoving:Connect(function() task.spawn(RefreshESP) end)
+-- Key handling (PC)
+if not isMobile then
+    local keyEnum = Enum.UserInputType.MouseButton2
+    UIS.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.UserInputType == keyEnum or input.KeyCode == keyEnum then holding = true end
+    end)
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType == keyEnum or input.KeyCode == keyEnum then holding = false end
+    end)
+end
 
--- ========================================================
--- Speedhack
--- ========================================================
-RunS.RenderStepped:Connect(function()
-    local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-    if hum and Options.Speedhack and Options.Speedhack.Value then
-        hum.WalkSpeed = Options.SpeedSlider and Options.SpeedSlider.Value or 100
+-- ========== HITBOX INCREASE (adjustable size) ==========
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if not hitboxIncrease then continue end
+        local size = hitboxSize
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LP and plr.Character then
+                local parts = {"HeadHB", "HumanoidRootPart"}
+                for _, pname in ipairs(parts) do
+                    local part = plr.Character:FindFirstChild(pname)
+                    if part then
+                        part.CanCollide = false
+                        part.Transparency = 1
+                        part.Size = Vector3.new(size, size, size)
+                    end
+                end
+            end
+        end
     end
 end)
 
--- ========================================================
--- Infinite Jump
--- ========================================================
-UIS.JumpRequest:Connect(function()
-    if Options.InfJump and Options.InfJump.Value and LP.Character then
+-- ========== WEAPON MODS ==========
+task.spawn(function()
+    while true do
+        task.wait(5)
+        if fireRateEnabled then
+            local weapons = game:GetService("ReplicatedStorage"):FindFirstChild("Weapons")
+            if weapons then
+                for _, v in ipairs(weapons:GetDescendants()) do
+                    if v.Name == "Auto" then v.Value = true end
+                    if v.Name == "FireRate" then v.Value = 0.02 end
+                end
+            end
+        end
+        if recoilEnabled then
+            local weapons = game:GetService("ReplicatedStorage"):FindFirstChild("Weapons")
+            if weapons then
+                for _, v in ipairs(weapons:GetDescendants()) do
+                    if v.Name == "RecoilControl" then v.Value = 0 end
+                    if v.Name == "MaxSpread" then v.Value = 0 end
+                end
+            end
+        end
+    end
+end)
+
+-- ========== MOVEMENT ==========
+RunService.RenderStepped:Connect(function()
+    if speedEnabled and LP.Character then
         local hum = LP.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum:ChangeState("Jumping") end
+        if hum then hum.WalkSpeed = speedValue end
     end
 end)
 
--- ========================================================
--- Fly
--- ========================================================
-local flyEnabled = false
-local flyBodyVel = nil
-local function ToggleFly()
-    if flyEnabled then
-        if flyBodyVel then flyBodyVel:Destroy() end
-        flyEnabled = false
-    else
-        local char = LP.Character
-        if not char then return end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not root then return end
-        flyBodyVel = Instance.new("BodyVelocity")
-        flyBodyVel.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-        flyBodyVel.Parent = root
-        flyEnabled = true
+UIS.InputBegan:Connect(function(input, gp)
+    if infJumpEnabled and input.KeyCode == Enum.KeyCode.Space and not gp then
+        if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
+            LP.Character.HumanoidRootPart.Velocity = Vector3.new(
+                LP.Character.HumanoidRootPart.Velocity.X, 52, LP.Character.HumanoidRootPart.Velocity.Z
+            )
+        end
+    end
+end)
+
+-- ========== ESP ==========
+local espHighlights = {}
+local function updateESP()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == LP then continue end
+        local char = plr.Character
+        local should = espEnabled and IsEnemy(plr) and char
+        if should then
+            if not espHighlights[plr] then
+                local hl = Instance.new("Highlight")
+                hl.Name = "Catalyst_ESP"
+                hl.Parent = char
+                espHighlights[plr] = hl
+            end
+            local hl = espHighlights[plr]
+            hl.FillColor = espColor
+            hl.FillTransparency = 0.5
+            hl.OutlineColor = Color3.new(1,1,1)
+            hl.OutlineTransparency = 0
+            hl.Adornee = char
+        else
+            if espHighlights[plr] then
+                espHighlights[plr]:Destroy()
+                espHighlights[plr] = nil
+            end
+        end
     end
 end
 
-RunS.RenderStepped:Connect(function()
-    if not (Options.FlyToggle and Options.FlyToggle.Value) then
-        if flyEnabled then ToggleFly() end
-        return
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if espEnabled then updateESP() end
     end
-    local char = LP.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    if not flyEnabled then
-        if not flyBodyVel then
-            flyBodyVel = Instance.new("BodyVelocity")
-            flyBodyVel.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-            flyBodyVel.Parent = root
-        end
-        flyEnabled = true
-    end
-    local up = 0
-    local down = 0
-    if isMobile then
-        if #UIS:GetTouches() > 0 then up = 60 end
+end)
+
+-- ========== FOV CIRCLE ==========
+local FovCircle = nil
+if pcall(function() return Drawing end) then
+    FovCircle = Drawing.new("Circle")
+    FovCircle.Thickness = 1.5
+    FovCircle.NumSides = 60
+    FovCircle.Filled = false
+    FovCircle.Transparency = 0.8
+end
+
+local function updateFOVCircle()
+    if not FovCircle then return end
+    if aimEnabled and fovCircleEnabled then
+        local mousePos = UIS:GetMouseLocation()
+        FovCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
+        local screenSize = Camera.ViewportSize
+        local radius = (fovDeg / 120) * screenSize.X
+        FovCircle.Radius = math.clamp(radius, 50, math.min(screenSize.X, screenSize.Y) / 1.5)
+        FovCircle.Color = fovCircleColor
+        FovCircle.Visible = true
     else
-        if UIS:IsKeyDown(Enum.KeyCode.Space) then up = 60 end
-        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then down = -60 end
+        if FovCircle then FovCircle.Visible = false end
     end
-    flyBodyVel.Velocity = Vector3.new(root.Velocity.X, up + down, root.Velocity.Z)
-end)
+end
 
-LP.CharacterAdded:Connect(function()
-    if flyBodyVel then flyBodyVel:Destroy(); flyBodyVel = nil end
-    flyEnabled = false
-end)
+RunService.RenderStepped:Connect(updateFOVCircle)
 
--- ========================================================
--- ПОСТРОЕНИЕ UI
--- ========================================================
--- Combat Tab (Main)
-Tabs.Main:AddSection("Aimbot Settings")
-local Toggle = Tabs.Main:AddToggle("MyToggle", { Title = "Enable Aimbot", Default = false })
-local Dropdown = Tabs.Main:AddDropdown("Dropdown", {
-    Title = "Aim Mode",
-    Values = { "AimAssist", "Hitbox Increase" },
-    Multi = false,
-    Default = "AimAssist"
+-- ========== UI ==========
+HomeTab:AddParagraph({
+    Title = "Catalyst Hub",
+    Content = "Rank: " .. rankText .. "\nGame: Arsenal\nVersion 3.3.0\nTG: @alchemistslimee\n\nSmooth aim (Lerp) + adjustable hitbox size"
 })
-local Keybind = Tabs.Main:AddKeybind("Keybind", { Title = "Aim Assist Keybind (PC)", Mode = "Hold", Default = "MouseRight" })
-local Slider = Tabs.Main:AddSlider("Slider", { Title = "Aimbot FOV (Degrees)", Default = 180, Min = 1, Max = 360, Rounding = 0 })
-local Colorpicker2 = Tabs.Main:AddColorpicker("Colorpicker2", { Title = "FOV Circle Color", Default = Color3.fromRGB(255, 255, 255) })
+HomeTab:AddButton({
+    Title = "Copy Discord",
+    Callback = function()
+        setclipboard("https://discord.gg/w9mfcck2zV")
+        Fluent:Notify({ Title = "Copied", Content = "Discord link copied", Duration = 2 })
+    end
+})
+
+-- Combat Tab
+CombatTab:AddToggle("AimMain", {Title = "Enable Aim", Default = false})
+    :OnChanged(function(v) aimEnabled = v end)
+
+CombatTab:AddSlider("FOV", {Title = "FOV (degrees)", Default = 90, Min = 10, Max = 180, Rounding = 0})
+    :OnChanged(function(v) fovDeg = v end)
+
+CombatTab:AddSlider("Smoothness", {Title = "Smoothness", Default = 0.07, Min = 0.01, Max = 0.2, Rounding = 3})
+    :OnChanged(function(v) smoothness = v end)
+
+local aimPartDropdown = CombatTab:AddDropdown("AimPart", {
+    Title = "Aim Part",
+    Values = {"Head", "HumanoidRootPart", "Torso"},
+    Default = "Head",
+    Multi = false
+})
+aimPartDropdown:OnChanged(function(v) aimPart = v end)
+
+local teamCheckToggle = CombatTab:AddToggle("TeamCheck", {Title = "Team Check", Default = true})
+teamCheckToggle:OnChanged(function(v) teamCheck = v; updateESP() end)
+
+CombatTab:AddToggle("WallCheck", {Title = "WallCheck (Visibility)", Default = true})
+    :OnChanged(function(v) wallCheck = v end)
+
+if not isMobile then
+    CombatTab:AddKeybind("AimKey", {Title = "Aim Key (Hold)", Mode = "Hold", Default = "MouseRight"})
+        :OnChanged(function(val)
+            if type(val) == "string" then
+                keybind = val
+                if val == "MouseRight" then
+                    keyEnum = Enum.UserInputType.MouseButton2
+                elseif val == "MouseLeft" then
+                    keyEnum = Enum.UserInputType.MouseButton1
+                else
+                    for _, e in pairs(Enum.UserInputType:GetEnumItems()) do
+                        if e.Name == val then keyEnum = e break end
+                    end
+                    for _, e in pairs(Enum.KeyCode:GetEnumItems()) do
+                        if e.Name == val then keyEnum = e break end
+                    end
+                end
+            end
+        end)
+end
 
 if isMobile then
-    Tabs.Main:AddSection("Mobile Controls")
-    local mobileAim = Tabs.Main:AddToggle("MobileAim", { Title = "Mobile Aim Assist (Always On)", Default = false })
-    Tabs.Main:AddParagraph({ Title = "Tip", Content = "When disabled, aim works on touch." })
+    CombatTab:AddToggle("MobileAimLock", {Title = "Mobile Aim Lock (Always On)", Default = false})
+        :OnChanged(function(v) mobileAimLock = v end)
 end
 
+CombatTab:AddToggle("HitboxIncrease", {Title = "Hitbox Increase (HeadHB + HRP)", Default = false})
+    :OnChanged(function(v) hitboxIncrease = v end)
+
+CombatTab:AddSlider("HitboxSize", {Title = "Hitbox Size", Default = 13, Min = 5, Max = 20, Rounding = 0})
+    :OnChanged(function(v) hitboxSize = v end)
+
+CombatTab:AddSection("Weapon Mods")
+CombatTab:AddToggle("FireRate", {Title = "FireRate Mod (Auto + 0.02)", Default = false})
+    :OnChanged(function(v) fireRateEnabled = v end)
+CombatTab:AddToggle("Recoil", {Title = "No Recoil / No Spread", Default = false})
+    :OnChanged(function(v) recoilEnabled = v end)
+
+-- Movement Tab
+MovementTab:AddToggle("Speed", {Title = "Speed Hack", Default = false})
+    :OnChanged(function(v) speedEnabled = v end)
+MovementTab:AddSlider("SpeedVal", {Title = "WalkSpeed Value", Default = 100, Min = 16, Max = 250, Rounding = 0})
+    :OnChanged(function(v) speedValue = v end)
+MovementTab:AddToggle("InfJump", {Title = "Infinite Jump (Velocity)", Default = false})
+    :OnChanged(function(v) infJumpEnabled = v end)
+
 -- Visuals Tab
-Tabs.Visuals:AddSection("Visual Settings")
-local espToggle = Tabs.Visuals:AddToggle("ESP Toggle", { Title = "Enable ESP (Team Checks)", Default = false })
-local espColor = Tabs.Visuals:AddColorpicker("Colorpicker", { Title = "Enemy ESP Color", Default = Color3.fromRGB(255, 0, 0) })
-espToggle:OnChanged(RefreshESP)
-espColor:OnChanged(RefreshESP)
+VisualsTab:AddToggle("ESP", {Title = "Player ESP", Default = false})
+    :OnChanged(function(v) espEnabled = v; updateESP() end)
+VisualsTab:AddColorpicker("ESPColor", {Title = "ESP Color", Default = Color3.fromRGB(255,0,0)})
+    :OnChanged(function(v) espColor = v; updateESP() end)
+VisualsTab:AddToggle("FOVCircle", {Title = "Show FOV Circle", Default = true})
+    :OnChanged(function(v) fovCircleEnabled = v end)
+VisualsTab:AddColorpicker("FOVColor", {Title = "FOV Circle Color", Default = Color3.fromRGB(255,255,255)})
+    :OnChanged(function(v) fovCircleColor = v end)
 
--- Misc Tab
-Tabs.Misc:AddSection("Movement Hacks")
-local speedToggle = Tabs.Misc:AddToggle("Speedhack", { Title = "Enable Speedhack", Default = false })
-local speedSlider = Tabs.Misc:AddSlider("SpeedSlider", { Title = "WalkSpeed Value", Default =100, Min = 16, Max = 250, Rounding = 0 })
-local infJump = Tabs.Misc:AddToggle("InfJump", { Title = "Infinite Jump", Default = false })
-local flyToggle = Tabs.Misc:AddToggle("FlyToggle", { Title = "Fly (Hold Jump / Touch)", Default = false })
-
--- Settings Tab (SaveManager)
+-- Settings Tab
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
-InterfaceManager:SetFolder("Catalyst")
-SaveManager:SetFolder("Catalyst/Arsenal")
-InterfaceManager:BuildInterfaceSection(Tabs.Settings)
-SaveManager:BuildConfigSection(Tabs.Settings)
+InterfaceManager:SetFolder("CatalystHub")
+SaveManager:SetFolder("CatalystHub/Arsenal")
+InterfaceManager:BuildInterfaceSection(SettingsTab)
+SaveManager:BuildConfigSection(SettingsTab)
 SaveManager:LoadAutoloadConfig()
 
--- Выбираем вкладку Home
-Window:SelectTab(Tabs.Home)
+-- Start aim
+startAim()
 
--- Периодическое обновление ESP
-while task.wait(120) do
-    RefreshESP()
-end
+-- Open Home tab
+Window:SelectTab(HomeTab)
