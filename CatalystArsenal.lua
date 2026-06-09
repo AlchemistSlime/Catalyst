@@ -1,11 +1,4 @@
---[[
-    Catalyst Hub | Arsenal
-    Version 3.3.0 (Final)
-    - One aim mode: V2 Lerp (smooth, no jitter)
-    - Hitbox Increase with adjustable size (HeadHB + HumanoidRootPart)
-    - WallCheck, TeamCheck, FOV circle, ESP, Speed, InfJump
-    - Mobile support (Aim Lock)
-]]
+
 
 local UIS = game:GetService("UserInputService")
 local isMobile = UIS.TouchEnabled and not UIS.MouseEnabled
@@ -290,7 +283,7 @@ RunService.RenderStepped:Connect(updateFOVCircle)
 -- ========== UI ==========
 HomeTab:AddParagraph({
     Title = "Catalyst Hub",
-    Content = "Rank: " .. rankText .. "\nGame: Arsenal\nVersion 3.3.0\nTG: @alchemistslimee\n\nSmooth aim (Lerp) + adjustable hitbox size"
+    Content = "Rank: " .. rankText .. "\nGame: Arsenal\nVersion 3.3.0\nTG: @alchemistslimee"
 })
 HomeTab:AddButton({
     Title = "Copy Discord",
@@ -321,11 +314,11 @@ aimPartDropdown:OnChanged(function(v) aimPart = v end)
 local teamCheckToggle = CombatTab:AddToggle("TeamCheck", {Title = "Team Check", Default = true})
 teamCheckToggle:OnChanged(function(v) teamCheck = v; updateESP() end)
 
-CombatTab:AddToggle("WallCheck", {Title = "WallCheck (Visibility)", Default = true})
+CombatTab:AddToggle("WallCheck", {Title = "WallCheck", Default = true})
     :OnChanged(function(v) wallCheck = v end)
 
 if not isMobile then
-    CombatTab:AddKeybind("AimKey", {Title = "Aim Key (Hold)", Mode = "Hold", Default = "MouseRight"})
+    CombatTab:AddKeybind("AimKey", {Title = "Aim Key", Mode = "Hold", Default = "MouseRight"})
         :OnChanged(function(val)
             if type(val) == "string" then
                 keybind = val
@@ -346,18 +339,18 @@ if not isMobile then
 end
 
 if isMobile then
-    CombatTab:AddToggle("MobileAimLock", {Title = "Mobile Aim Lock (Always On)", Default = false})
+    CombatTab:AddToggle("MobileAimLock", {Title = "Mobile Aim Lock", Default = false})
         :OnChanged(function(v) mobileAimLock = v end)
 end
 
-CombatTab:AddToggle("HitboxIncrease", {Title = "Hitbox Increase (HeadHB + HRP)", Default = false})
+CombatTab:AddToggle("HitboxIncrease", {Title = "Hitbox Increase", Default = false})
     :OnChanged(function(v) hitboxIncrease = v end)
 
 CombatTab:AddSlider("HitboxSize", {Title = "Hitbox Size", Default = 13, Min = 5, Max = 20, Rounding = 0})
     :OnChanged(function(v) hitboxSize = v end)
 
 CombatTab:AddSection("Weapon Mods")
-CombatTab:AddToggle("FireRate", {Title = "FireRate Mod (Auto + 0.02)", Default = false})
+CombatTab:AddToggle("FireRate", {Title = "FireRate Mod", Default = false})
     :OnChanged(function(v) fireRateEnabled = v end)
 CombatTab:AddToggle("Recoil", {Title = "No Recoil / No Spread", Default = false})
     :OnChanged(function(v) recoilEnabled = v end)
@@ -367,7 +360,7 @@ MovementTab:AddToggle("Speed", {Title = "Speed Hack", Default = false})
     :OnChanged(function(v) speedEnabled = v end)
 MovementTab:AddSlider("SpeedVal", {Title = "WalkSpeed Value", Default = 100, Min = 16, Max = 250, Rounding = 0})
     :OnChanged(function(v) speedValue = v end)
-MovementTab:AddToggle("InfJump", {Title = "Infinite Jump (Velocity)", Default = false})
+MovementTab:AddToggle("InfJump", {Title = "Infinite Jump", Default = false})
     :OnChanged(function(v) infJumpEnabled = v end)
 
 -- Visuals Tab
