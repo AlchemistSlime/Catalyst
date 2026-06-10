@@ -1,4 +1,9 @@
 -- ========================================================
+-- 🔧 РЕЖИМ РАБОТЫ (измените при необходимости)
+-- ========================================================
+local KeylessMode = true   -- true = без ключа, false = требовать ключ
+
+-- ========================================================
 -- 📦 ОБЪЯВЛЕНИЕ СЕРВИСОВ И ПЕРЕМЕННЫХ
 -- ========================================================
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -34,14 +39,6 @@ _G.GameName = "Unknown Game"
 -- ========================================================
 -- 📝 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 -- ========================================================
-local function keys(t)
-    local res = {}
-    for k, v in pairs(t) do
-        table.insert(res, tostring(k))
-    end
-    return table.concat(res, ", ")
-end
-
 local function Log(message)
     print("[Catalyst Hub] " .. tostring(message))
 end
@@ -138,7 +135,18 @@ if not _G.ScriptURL then
 end
 
 -- ========================================================
--- 🔑 АВТО-ВХОД ПО СОХРАНЕННОМУ КЛЮЧУ
+-- ⚡ ЕСЛИ KEYLESS MODE ВКЛЮЧЕН — ЗАПУСКАЕМ СРАЗУ
+-- ========================================================
+if KeylessMode then
+    Log("Keyless mode enabled. Launching script with Standard rank.")
+    _G.CatalystKeyType = "Keyless"
+    _G.CatalystRank = "Standard"
+    LaunchCheatDirectly()
+    return
+end
+
+-- ========================================================
+-- 🔑 АВТО-ВХОД ПО СОХРАНЕННОМУ КЛЮЧУ (если KeylessMode = false)
 -- ========================================================
 local savedKey = ""
 pcall(function()
@@ -175,7 +183,7 @@ end
 Log("No valid key found. Launching GUI...")
 
 -- ========================================================
--- 🖥️ GUI FLUENT
+-- 🖥️ GUI FLUENT (только если нет сохранённого ключа)
 -- ========================================================
 local KeyWindow = Fluent:CreateWindow({
     Title = "Catalyst",
