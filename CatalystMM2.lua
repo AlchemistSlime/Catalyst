@@ -1,9 +1,8 @@
 -- ========================================================
--- CATALYST MM2 v5.1 (AIMBOT BACK, LIGHT & FAST)
+-- CATALYST MM2 v5.3.7 (Fling fixed, no status notifications)
 -- ========================================================
 local RS, Plrs, UIS, RunS = game:GetService("ReplicatedStorage"), game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LP, Cam = Plrs.LocalPlayer, workspace.CurrentCamera
-
 local isMobile = UIS.TouchEnabled or not UIS.MouseEnabled
 
 -- Загрузка Fluent
@@ -47,56 +46,469 @@ local function GetRole(p)
     return role
 end
 
+local function HasKnife()
+    local char = LP.Character
+    return char and char:FindFirstChild("Knife") ~= nil
+end
+
 local function HasGun()
     local char = LP.Character
     return char and (char:FindFirstChild("Gun") or char:FindFirstChild("Revolver")) ~= nil
 end
 
--- ========== ПОИСК GUN DROP ==========
-local function FindGunDrop()
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and obj.Name:lower():match("GunDrop") then
-            return obj
+-- ========== IsMapLoaded / IsDead ==========
+local MAP_FOLDERS = {
+    "House2", "MilBase", "Office2", "Office3", "Hospital3",
+    "Hotel2", "Mansion2", "Factory", "Bank2", "BioLab",
+    "PoliceStation", "Workplace"
+}
+
+local isMapLoaded = false
+local isDead = false
+local currentMapName = "None"
+local lastMapLoadTime = 0
+local deathImmuneUntil = 0
+
+local function checkMapLoaded()
+    local found = false
+    local mapName = nil
+    for _, name in ipairs(MAP_FOLDERS) do
+        if workspace:FindFirstChild(name) then
+            found = true
+            mapName = name
+            break
         end
+    end
+    local prev = isMapLoaded
+    isMapLoaded = found
+    if found then
+        currentMapName = mapName
+    else
+        currentMapName = "None"
+    end
+
+    if not prev and found then
+        lastMapLoadTime = tick()
+        isDead = false
+        deathImmuneUntil = tick() + 15
+    elseif prev and not found then
+        isDead = false
+        deathImmuneUntil = 0
+    end
+end
+
+local function checkDead()
+    if not isMapLoaded then
+        isDead = false
+        return
+    end
+    if tick() < deathImmuneUntil then
+        isDead = false
+        return
+    end
+    local char = LP.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then
+        isDead = false
+        return
+    end
+    local hrp = char.HumanoidRootPart
+
+    local glitch = nil
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name == "GlitchProof" then
+            glitch = obj
+            break
+        end
+    end
+
+    if not glitch then
+        isDead = false
+        return
+    end
+
+    local pos = nil
+    if glitch:IsA("BasePart") then
+        pos = glitch.Position
+    elseif glitch:IsA("Model") then
+        pos = glitch:GetPivot().Position
+    else
+        isDead = false
+        return
+    end
+
+    if pos and (pos - hrp.Position).Magnitude <= 250 then
+        isDead = true
+    else
+        isDead = false
+    end
+end
+
+task.spawn(function()
+    while true do
+        task.wait(1)
+        local prevMap, prevDead = isMapLoaded, isDead
+        pcall(checkMapLoaded)
+        pcall(checkDead)
+        if (isMapLoaded ~= prevMap) or (isDead ~= prevDead) then
+            print(string.format("[Catalyst] Map: %s | Loaded: %s | Dead: %s", currentMapName, tostring(isMapLoaded), tostring(isDead)))
+        end
+    end
+end)
+
+-- ========== ПОИСК GUN DROP ==========
+local function findGun()
+    for _, v in ipairs(workspace:GetDescendants()) do
+        if v.Name == "GunDrop" and v:IsA("BasePart") then return v end
     end
     return nil
 end
 
--- ========== ТЕЛЕПОРТ К GUN DROP ==========
-local tpCooldown = false
-local lastTP = 0
-local cooldownPara = nil
+-- ========== GUN TP (Murderer не может) ==========
+local autoTpGun = false
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if autoTpGun and not isDead and LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
+            if GetRole(LP) == "Murderer" then continue end
+            local gun = findGun()
+            if gun then
+                local hrp = LP.Character.HumanoidRootPart
+                local oldPos = hrp.CFrame
+                hrp.CFrame = gun.CFrame + Vector3.new(0, 2, 0)
+                task.wait(0.2)
+                hrp.CFrame = oldPos
+                task.wait(1)
+            end
+        end
+    end
+end)
 
-local function TeleportToGunDrop(returnBack)
-    if tpCooldown then
-        if cooldownPara then cooldownPara:SetContent("Cooldown " .. math.ceil(3 - (tick() - lastTP)) .. "s") end
-        return false
+local function TpToGunOnce()
+    if isDead then return end
+    if GetRole(LP) == "Murderer" then return end
+    if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then return end
+    local gun = findGun()
+    if gun then
+        local hrp = LP.Character.HumanoidRootPart
+        local oldPos = hrp.CFrame
+        hrp.CFrame = gun.CFrame + Vector3.new(0, 2, 0)
+        task.wait(0.2)
+        hrp.CFrame = oldPos
     end
-    if HasGun() then return false end
-    local gd = FindGunDrop()
-    if not gd then return false end
+end
+
+-- ========== STAB AURA ==========
+local stabAuraEnabled = false
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if stabAuraEnabled and GetRole(LP) == "Murderer" and HasKnife() then
+            local knife = LP.Character:FindFirstChild("Knife") or (LP.Backpack and LP.Backpack:FindFirstChild("Knife"))
+            if knife and knife:IsA("Tool") then
+                local hum = LP.Character:FindFirstChild("Humanoid")
+                if hum then
+                    knife:Activate()
+                end
+            end
+        end
+    end
+end)
+
+-- ========== AUTO EVADE ==========
+local autoEvadeEnabled = false
+local lastEvadeTime = 0
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if autoEvadeEnabled and GetRole(LP) ~= "Murderer" and LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
+            local myHrp = LP.Character.HumanoidRootPart
+            local myPos = myHrp.Position
+            local nearestMurderer = nil
+            local minDist = 15
+            for _, p in pairs(Plrs:GetPlayers()) do
+                if p ~= LP and GetRole(p) == "Murderer" and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
+                    if dist < minDist then
+                        nearestMurderer = p.Character.HumanoidRootPart
+                        minDist = dist
+                    end
+                end
+            end
+            if nearestMurderer and tick() - lastEvadeTime > 1.5 then
+                local evadeDir = (myPos - nearestMurderer.Position).Unit
+                local hum = LP.Character:FindFirstChild("Humanoid")
+                if hum then hum:ChangeState("Jumping") end
+                myHrp.Velocity = evadeDir * Vector3.new(40, 0, 40) + Vector3.new(0, 20, 0)
+                lastEvadeTime = tick()
+            end
+        end
+    end
+end)
+
+-- ========== FAKE LAG ==========
+local fakeLagEnabled = false
+local fakeLagPing = 500
+
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if fakeLagEnabled and LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = LP.Character.HumanoidRootPart
+            local oldVel = hrp.Velocity
+            hrp.Velocity = Vector3.zero
+            task.wait(fakeLagPing / 1000)
+            if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
+                LP.Character.HumanoidRootPart.Velocity = oldVel
+            end
+            task.wait(0.5)
+        else
+            task.wait(0.5)
+        end
+    end
+end)
+
+-- ========== INFINITY JUMP + SHIFT ==========
+local infinityJumpEnabled = false
+RunS.RenderStepped:Connect(function()
+    if not infinityJumpEnabled then return end
     local char = LP.Character
-    if not char then return false end
+    if not char then return end
+    local hum = char:FindFirstChild("Humanoid")
     local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false end
-    local orig = hrp.CFrame
-    hrp.CFrame = gd.CFrame * CFrame.new(0, 2, 0)
-    task.wait(0.1)
-    if returnBack and hrp and hrp.Parent then
-        hrp.CFrame = orig
+    if not (hum and hrp) then return end
+
+    if UIS:IsKeyDown(Enum.KeyCode.Space) or (isMobile and #UIS:GetTouches() > 0) then
+        hrp.Velocity = Vector3.new(hrp.Velocity.X, 60, hrp.Velocity.Z)
+    elseif UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
+        hrp.Velocity = Vector3.new(hrp.Velocity.X, -80, hrp.Velocity.Z)
+    else
+        if hrp.Velocity.Y < -10 then
+            hrp.Velocity = Vector3.new(hrp.Velocity.X, -10, hrp.Velocity.Z)
+        end
     end
-    tpCooldown = true
-    lastTP = tick()
-    if cooldownPara then cooldownPara:SetContent("Cooldown 3s") end
-    task.wait(3)
-    tpCooldown = false
-    if cooldownPara then cooldownPara:SetContent("Ready") end
-    return true
+end)
+
+-- ========== FLY (WASD) ==========
+local flyEnabled = false
+local BodyVel, BodyGyro = nil, nil
+
+local function cleanupFly()
+    if BodyVel then BodyVel:Destroy() BodyVel = nil end
+    if BodyGyro then BodyGyro:Destroy() BodyGyro = nil end
+end
+
+local function setupFly()
+    if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = LP.Character.HumanoidRootPart
+    BodyVel = Instance.new("BodyVelocity")
+    BodyVel.MaxForce = Vector3.new(40000, 40000, 40000)
+    BodyVel.Velocity = Vector3.zero
+    BodyVel.P = 1000
+    BodyVel.Parent = hrp
+
+    BodyGyro = Instance.new("BodyGyro")
+    BodyGyro.MaxTorque = Vector3.new(40000, 40000, 40000)
+    BodyGyro.D = 100
+    BodyGyro.P = 5000
+    BodyGyro.CFrame = hrp.CFrame
+    BodyGyro.Parent = hrp
+end
+
+RunS.RenderStepped:Connect(function()
+    if not flyEnabled then
+        cleanupFly()
+        return
+    end
+    if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then
+        cleanupFly()
+        return
+    end
+    if not BodyVel or not BodyGyro or BodyVel.Parent == nil then
+        setupFly()
+    end
+    local hrp = LP.Character.HumanoidRootPart
+    local speed = 50
+    local moveDir = Vector3.zero
+    if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Cam.CFrame.LookVector end
+    if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Cam.CFrame.LookVector end
+    if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Cam.CFrame.RightVector end
+    if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Cam.CFrame.RightVector end
+    if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
+    BodyVel.Velocity = moveDir * speed
+
+    if UIS:IsKeyDown(Enum.KeyCode.Space) or (isMobile and #UIS:GetTouches() > 0) then
+        BodyVel.Velocity = Vector3.new(BodyVel.Velocity.X, speed, BodyVel.Velocity.Z)
+    elseif UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
+        BodyVel.Velocity = Vector3.new(BodyVel.Velocity.X, -speed, BodyVel.Velocity.Z)
+    end
+
+    BodyGyro.CFrame = Cam.CFrame
+end)
+
+UIS.JumpRequest:Connect(function()
+    if flyEnabled and LP.Character then
+        local hum = LP.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum:ChangeState("Jumping") end
+    end
+end)
+-- ========== ИНИЦИАЛИЗАЦИЯ СЛУЖБ ==========
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Plrs = Players
+local LP = Players.LocalPlayer
+
+-- ========== TROLLING FUNCTIONS ==========
+local function GetPlayerNames()
+    local names = {}
+    for _, p in ipairs(Plrs:GetPlayers()) do
+        if p ~= LP then
+            table.insert(names, p.Name)
+        end
+    end
+    return names
+end
+
+local function GetPlayerByName(name)
+    for _, p in ipairs(Plrs:GetPlayers()) do
+        if p.Name == name then return p end
+    end
+    return nil
+end
+
+local function TPToPlayer(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
+    if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then return end
+    local myHrp = LP.Character.HumanoidRootPart
+    local targetHrp = targetPlayer.Character.HumanoidRootPart
+    myHrp.CFrame = targetHrp.CFrame + Vector3.new(0, 2, 0)
+end
+
+local function TPToRole(role)
+    for _, p in ipairs(Plrs:GetPlayers()) do
+        if p ~= LP and GetRole(p) == role and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            TPToPlayer(p)
+            break
+        end
+    end
+end
+
+-- ========== ОБНОВЛЕННЫЙ MM2 FLING (С GOD MODE) ==========
+local function FlingPlayer(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return end
+    
+    local targetHrp = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local targetHum = targetPlayer.Character:FindFirstChild("Humanoid")
+    if not targetHrp or not targetHum or targetHum.Health <= 0 then return end
+
+    if not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart") then return end
+    local myHrp = LP.Character.HumanoidRootPart
+    local myHum = LP.Character:FindFirstChildOfClass("Humanoid")
+
+    -- 1. Сохраняем исходную позицию
+    local oldCFrame = myHrp.CFrame
+
+    -- 2. АНТИ-СМЕРТЬ ДЛЯ MM2 (Ломаем получение урона на сервере)
+    local charChildren = LP.Character:GetChildren()
+    if myHum then
+        myHum.PlatformStand = true
+        -- Отключаем получение урона через внутренние стейты Roblox
+        myHum:ChangeState(Enum.HumanoidStateType.Physics)
+    end
+
+    -- 3. Настройка сил для флинга (Раскрутка)
+    local att = Instance.new("Attachment", myHrp)
+    
+    local angVel = Instance.new("AngularVelocity")
+    angVel.Attachment0 = att
+    angVel.MaxTorque = math.huge
+    angVel.AngularVelocity = Vector3.new(0, 999999, 0)
+    angVel.Parent = myHrp
+
+    local linVel = Instance.new("LinearVelocity")
+    linVel.Attachment0 = att
+    linVel.MaxForce = math.huge
+    linVel.VectorVelocity = Vector3.new(9999, 9999, 9999)
+    linVel.Parent = myHrp
+
+    -- 4. Отключение коллизии + убираем регистрацию ударов по нам
+    local collisionLoop = RunService.Heartbeat:Connect(function()
+        if LP.Character then
+            for _, part in ipairs(LP.Character:GetChildren()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                    -- Обнуляем скорость падения, чтобы античит MM2 не думал, что мы упали в бездну
+                    part.Velocity = Vector3.new(part.Velocity.X, 0, part.Velocity.Z)
+                end
+            end
+        end
+    end)
+
+    -- 5. Цикл удержания на цели (сократим до 2.5 сек, для MM2 этого за глаза)
+    local duration = 2.5 
+    local startTime = tick()
+
+    while (tick() - startTime) < duration do
+        if not targetPlayer or not targetPlayer.Character or not targetHrp or not targetHum or targetHum.Health <= 0 then 
+            break 
+        end
+        
+        -- Упреждение движения + залетаем жестко под ноги/в торс
+        local prediction = targetHrp.AssemblyLinearVelocity * 0.04
+        local randomOffset = Vector3.new(math.random(-3, 3), math.random(-1, 1), math.random(-3, 3)) * 0.05
+        
+        myHrp.CFrame = CFrame.new(targetHrp.Position + prediction + randomOffset)
+        myHrp.AssemblyLinearVelocity = Vector3.new(9999, 9999, 9999)
+        
+        RunService.Heartbeat:Wait()
+    end
+
+    -- 6. Завершение атаки и удаление сил флинга
+    collisionLoop:Disconnect()
+    angVel:Destroy()
+    linVel:Destroy()
+    att:Destroy()
+    
+    myHrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    myHrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
+    -- 7. ТЕЛЕПОРТ НАЗАД И СТОПОР (ФЛАЙ)
+    myHrp.CFrame = oldCFrame
+
+    local flyStopper = Instance.new("BodyVelocity")
+    flyStopper.Name = "MM2Stop"
+    flyStopper.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    flyStopper.Velocity = Vector3.new(0, 0, 0)
+    flyStopper.Parent = myHrp
+
+    local stopTime = tick()
+    while (tick() - stopTime) < 0.15 do -- Чуть дольше держим стопор для проверки античитом MM2
+        myHrp.CFrame = oldCFrame
+        myHrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        myHrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        RunService.Heartbeat:Wait()
+    end
+
+    flyStopper:Destroy()
+    
+    -- 8. ВЫХОД ИЗ GOD MODE (Полный разбаг персонажа)
+    if myHum then
+        myHum.PlatformStand = false
+        myHum:ChangeState(Enum.HumanoidStateType.GettingUp)
+    end
+end
+
+local function FlingRole(role)
+    for _, p in ipairs(Plrs:GetPlayers()) do
+        if p ~= LP and GetRole(p) == role and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            FlingPlayer(p)
+            break
+        end
+    end
 end
 
 -- ========== GUI ==========
 local Window = Fluent:CreateWindow({
-    Title = "Catalyst v5.1.0" .. (isMobile and " [Mobile]" or ""),
+    Title = "Catalyst v5.3.7" .. (isMobile and " [Mobile]" or ""),
     SubTitle = "MM2",
     TabWidth = 160,
     Size = UDim2.fromOffset(550, 500),
@@ -108,6 +520,7 @@ local Tabs = {
     Home = Window:AddTab({ Title = "Home", Icon = "home" }),
     Combat = Window:AddTab({ Title = "Combat", Icon = "crosshair" }),
     Visuals = Window:AddTab({ Title = "Visuals", Icon = "eye" }),
+    Trolling = Window:AddTab({ Title = "Trolling", Icon = "users" }),
     Misc = Window:AddTab({ Title = "Misc", Icon = "star" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
@@ -115,8 +528,20 @@ local Options = Fluent.Options
 
 -- Home
 local rankText = (_G.CatalystKeyType or "Free") .. " / " .. (_G.CatalystRank or "Standard")
-Tabs.Home:AddParagraph({ Title = "Catalyst", Content = "Rank: " .. rankText .. "\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 5.1" })
+local infoPara = Tabs.Home:AddParagraph({
+    Title = "Catalyst",
+    Content = string.format("Rank: %s\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 5.3.7\nMap: %s | Dead: %s",
+        rankText, currentMapName, tostring(isDead))
+})
 Tabs.Home:AddButton({ Title = "Copy Discord", Callback = function() setclipboard("https://discord.gg/w9mfcck2zV") Fluent:Notify({ Title = "Copied" }) end })
+
+task.spawn(function()
+    while true do
+        task.wait(1)
+        infoPara:SetContent(string.format("Rank: %s\nMM2\nAlchemist Slime\nTG: @alchemistslimee\nVersion 5.3.7\nMap: %s | Dead: %s",
+            rankText, currentMapName, tostring(isDead)))
+    end
+end)
 
 -- ========== COMBAT TAB ==========
 if not isMobile then
@@ -130,9 +555,17 @@ if not isMobile then
 end
 
 Tabs.Combat:AddSection("Gun Drop Teleport")
-local tpBtn = Tabs.Combat:AddButton({ Title = "TP to Gun (once)", Callback = function() TeleportToGunDrop(true) end })
-local autoTP = Tabs.Combat:AddToggle("autoTP", { Title = "Auto TP every 2s", Default = false })
-cooldownPara = Tabs.Combat:AddParagraph({ Title = "Cooldown", Content = "Ready" })
+Tabs.Combat:AddButton({ Title = "TP to Gun (once)", Callback = TpToGunOnce })
+local autoTPToggle = Tabs.Combat:AddToggle("autoTP", { Title = "Auto TP Gun (fast loop)", Default = false })
+autoTPToggle:OnChanged(function(val) autoTpGun = val end)
+
+Tabs.Combat:AddSection("Stab Aura")
+local stabToggle = Tabs.Combat:AddToggle("stabAura", { Title = "Stab Aura (Murderer)", Default = false })
+stabToggle:OnChanged(function(val) stabAuraEnabled = val end)
+
+Tabs.Combat:AddSection("Auto Evade")
+local evadeToggle = Tabs.Combat:AddToggle("autoEvade", { Title = "Auto Evade (innocent)", Default = false })
+evadeToggle:OnChanged(function(val) autoEvadeEnabled = val end)
 
 -- ========== VISUALS TAB ==========
 Tabs.Visuals:AddSection("Highlight ESP")
@@ -155,18 +588,72 @@ if not isMobile then
     local innocTxtColor = Tabs.Visuals:AddColorpicker("innTxtCol", { Title = "Text Color", Default = Color3.fromRGB(0,255,0) })
 end
 
+-- ========== TROLLING TAB ==========
+local playerDropTP = Tabs.Trolling:AddDropdown("tpPlayer", { Title = "Selected Player (TP)", Values = GetPlayerNames(), Default = "", AllowClear = true })
+local playerDropFling = Tabs.Trolling:AddDropdown("flingPlayer", { Title = "Selected Player (Fling)", Values = GetPlayerNames(), Default = "", AllowClear = true })
+
+local function RefreshDropdowns()
+    local names = GetPlayerNames()
+    playerDropTP:SetValues(names)
+    playerDropFling:SetValues(names)
+end
+Plrs.PlayerAdded:Connect(RefreshDropdowns)
+Plrs.PlayerRemoving:Connect(function() task.wait(0.1) RefreshDropdowns() end)
+
+Tabs.Trolling:AddSection("Teleport")
+Tabs.Trolling:AddButton({ Title = "TP to Murderer", Callback = function() TPToRole("Murderer") end })
+Tabs.Trolling:AddButton({ Title = "TP to Sheriff", Callback = function() TPToRole("Sheriff") end })
+Tabs.Trolling:AddButton({ Title = "TP to Selected", Callback = function()
+    local name = Options.tpPlayer.Value
+    if name and name ~= "" then
+        local target = GetPlayerByName(name)
+        if target then TPToPlayer(target) end
+    end
+end })
+
+Tabs.Trolling:AddSection("Fling")
+Tabs.Trolling:AddButton({ Title = "Fling Murderer", Callback = function() FlingRole("Murderer") end })
+Tabs.Trolling:AddButton({ Title = "Fling Sheriff", Callback = function() FlingRole("Sheriff") end })
+Tabs.Trolling:AddButton({ Title = "Fling Selected", Callback = function()
+    local name = Options.flingPlayer.Value
+    if name and name ~= "" then
+        local target = GetPlayerByName(name)
+        if target then FlingPlayer(target) end
+    end
+end })
+
 -- ========== MISC TAB ==========
 Tabs.Misc:AddSection("Movement")
 local noclip = Tabs.Misc:AddToggle("noclip", { Title = "No-Clip", Default = false })
-local fly = Tabs.Misc:AddToggle("fly", { Title = "Fly", Default = false })
 local speed = Tabs.Misc:AddToggle("speed", { Title = "Speedhack", Default = false })
 local speedVal = Tabs.Misc:AddSlider("speedVal", { Title = "Speed", Default = 50, Min = 16, Max = 250, Rounding = 0 })
+
+Tabs.Misc:AddSection("Fly")
+local infinityJumpToggle = Tabs.Misc:AddToggle("infinityJump", { Title = "Infinity Jump + Slow Fall", Default = false })
+infinityJumpToggle:OnChanged(function(val) infinityJumpEnabled = val end)
+
+local flyToggle = Tabs.Misc:AddToggle("fly", { Title = "Fly (WASD)", Default = false })
+flyToggle:OnChanged(function(val)
+    flyEnabled = val
+    if not val then cleanupFly() end
+end)
+
+Tabs.Misc:AddSection("Fake Lag")
+local lagToggle = Tabs.Misc:AddToggle("fakeLag", { Title = "Fake Lag (freeze)", Default = false })
+lagToggle:OnChanged(function(val) fakeLagEnabled = val end)
+local lagPingSlider = Tabs.Misc:AddSlider("fakeLagPing", { Title = "Ping (ms)", Default = 500, Min = 200, Max = 5000, Rounding = 0 })
+lagPingSlider:OnChanged(function(val) fakeLagPing = val end)
 
 -- ========== ESP HIGHLIGHT ==========
 local function UpdateHighlight(p)
     if not p or p == LP or not p.Character then return end
     local role = GetRole(p)
     local hl = p.Character:FindFirstChild("Catalyst_HL")
+    local hum = p.Character:FindFirstChild("Humanoid")
+    if hum and hum.Health <= 0 then
+        if hl then hl:Destroy() end
+        return
+    end
     local show = false
     local base = Color3.new(1,1,1)
     if role == "Murderer" and murHighlight and murHighlight.Value then
@@ -197,7 +684,7 @@ end
 local gunDropHighlight = nil
 local function UpdateGunDropHighlight()
     if gdHighlight and gdHighlight.Value then
-        local gd = FindGunDrop()
+        local gd = findGun()
         if gd then
             if not gunDropHighlight or gunDropHighlight.Parent ~= gd then
                 if gunDropHighlight then gunDropHighlight:Destroy() end
@@ -217,7 +704,6 @@ local function UpdateGunDropHighlight()
     end
 end
 
--- Цикл обновления ролей и подсветки
 task.spawn(function()
     while true do
         task.wait(2)
@@ -228,16 +714,22 @@ task.spawn(function()
     end
 end)
 
--- Name ESP для ПК (только если включён)
+-- Name ESP для ПК
 if not isMobile then
     local nameTexts = {}
     RunS.RenderStepped:Connect(function()
         for _, p in pairs(Plrs:GetPlayers()) do
-            if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
+            if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local hum = p.Character:FindFirstChild("Humanoid")
+                local health = hum and hum.Health or 0
+                local isPlayerDead = health <= 0
                 local role = GetRole(p)
                 local show = false
                 local color = Color3.new(1,1,1)
-                if role == "Murderer" and Options.murTxt and Options.murTxt.Value then
+                if isPlayerDead then
+                    show = true
+                    color = Color3.fromRGB(128,128,128)
+                elseif role == "Murderer" and Options.murTxt and Options.murTxt.Value then
                     show = true
                     color = Options.murTxtCol and Options.murTxtCol.Value or Color3.fromRGB(255,0,0)
                 elseif role == "Sheriff" and Options.sherTxt and Options.sherTxt.Value then
@@ -259,7 +751,7 @@ if not isMobile then
                             txt.Size = 14
                             nameTexts[p] = txt
                         end
-                        txt.Text = p.Name .. " (" .. role .. ")"
+                        txt.Text = p.Name .. " (" .. role .. ")" .. (isPlayerDead and " [DEAD]" or "")
                         txt.Position = Vector2.new(vec.X, vec.Y)
                         txt.Color = color
                         txt.Visible = true
@@ -276,7 +768,7 @@ if not isMobile then
     end)
 end
 
--- ========== ДВИЖЕНИЕ ==========
+-- ========== ДВИЖЕНИЕ (Speed, NoClip) ==========
 RunS.RenderStepped:Connect(function()
     local char = LP.Character
     if not char then return end
@@ -295,33 +787,6 @@ RunS.RenderStepped:Connect(function()
             if part:IsA("BasePart") then part.CanCollide = false end
         end
     end
-
-    if fly and fly.Value then
-        if UIS:IsKeyDown(Enum.KeyCode.Space) or (isMobile and #UIS:GetTouches() > 0) then
-            root.Velocity = Vector3.new(root.Velocity.X, 60, root.Velocity.Z)
-        elseif UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
-            root.Velocity = Vector3.new(root.Velocity.X, -60, root.Velocity.Z)
-        else
-            root.Velocity = Vector3.new(root.Velocity.X, 0, root.Velocity.Z)
-        end
-    end
-end)
-
-UIS.JumpRequest:Connect(function()
-    if fly and fly.Value and LP.Character then
-        local hum = LP.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum:ChangeState("Jumping") end
-    end
-end)
-
--- ========== АВТО-ТП ==========
-task.spawn(function()
-    while true do
-        task.wait(2)
-        if autoTP and autoTP.Value then
-            pcall(TeleportToGunDrop, true)
-        end
-    end
 end)
 
 -- ========== АИМБОТ ДЛЯ ПК ==========
@@ -334,17 +799,20 @@ if not isMobile then
         local maxDist = (fov / 360) * Cam.ViewportSize.X
         local mousePos = UIS:GetMouseLocation()
         for _, p in pairs(Plrs:GetPlayers()) do
-            if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
-                local tRole = GetRole(p)
-                local vec, on = Cam:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
-                if on then
-                    local dist = (Vector2.new(vec.X, vec.Y) - mousePos).Magnitude
-                    if dist <= maxDist then
-                        local angle = math.deg(math.acos(math.clamp(Cam.CFrame.LookVector:Dot((p.Character.HumanoidRootPart.Position - Cam.CFrame.Position).Unit), -1, 1)))
-                        if myRole == "Murderer" and (tRole == "Sheriff" or tRole == "Innocent") and angle < bestAngle then
-                            bestAngle, best = angle, p.Character.HumanoidRootPart
-                        elseif myRole == "Sheriff" and tRole == "Murderer" and angle < bestAngle then
-                            bestAngle, best = angle, p.Character.HumanoidRootPart
+            if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local hum = p.Character:FindFirstChild("Humanoid")
+                if hum and hum.Health > 0 then
+                    local tRole = GetRole(p)
+                    local vec, on = Cam:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
+                    if on then
+                        local dist = (Vector2.new(vec.X, vec.Y) - mousePos).Magnitude
+                        if dist <= maxDist then
+                            local angle = math.deg(math.acos(math.clamp(Cam.CFrame.LookVector:Dot((p.Character.HumanoidRootPart.Position - Cam.CFrame.Position).Unit), -1, 1)))
+                            if myRole == "Murderer" and (tRole == "Sheriff" or tRole == "Innocent") and angle < bestAngle then
+                                bestAngle, best = angle, p.Character.HumanoidRootPart
+                            elseif myRole == "Sheriff" and tRole == "Murderer" and angle < bestAngle then
+                                bestAngle, best = angle, p.Character.HumanoidRootPart
+                            end
                         end
                     end
                 end
